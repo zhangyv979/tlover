@@ -30,6 +30,71 @@
     <link rel="apple-touch-icon" href="icons/xinjian-apple.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/xinjian-192.png">
 
+    <!-- 键盘弹出期间抑制过渡，缓解 WebView 的 adjustResize 逐帧重排（P35） -->
+    <script data-src="js/viewport-guard.js">
+/* ===== js/viewport-guard.js ===== */
+/**
+ * js/viewport-guard.js
+ * 键盘 / 窗口尺寸变化期间的渲染保护（P35）
+ * ------------------------------------------------------------------
+ * 要解决的问题：
+ *   同一个站点，在 Chrome 里弹软键盘很顺，在 WebView 壳里又卡又抖。
+ *
+ * 原因：
+ *   Chrome for Android 默认 interactive-widget=resizes-visual，键盘弹起只缩
+ *   visual viewport，布局尺寸不变 —— 不重排、不重绘、不触发 resize 事件。
+ *   而 WebView 用 adjustResize，键盘动画的每一帧都真的把布局视口改矮：
+ *     · body::before 这类全屏 fixed 背景要逐帧重算 background-size: cover
+ *     · 58 处 backdrop-filter 要逐帧重新采样模糊
+ *     · 20 个 position:fixed 元素 + 数十处 transition 被逐帧重启
+ *
+ *   注意：这里不能靠把 100% 换成 100vh 来逃避 —— body 本身就是 height:100vh，
+ *   而 vh 在 adjustResize 下同样以 layout viewport 为基准，一样跟着键盘变矮。
+ *   唯一能「不重排」的办法是让 WebView 别改布局（interactive-widget=resizes-visual），
+ *   但那样 fixed 底栏会被键盘盖住，需要配套 visualViewport 适配，风险大于收益，
+ *   所以这里改为「接受重排，但把每帧成本压到最低」。
+ *
+ * 这个文件做的事很小：
+ *   尺寸变化期间给 <html> 挂 window-resizing，由 CSS 把过渡时长压到 0；
+ *   尺寸稳定 260ms 后摘掉。只影响 transition，不碰 animation、不碰任何交互逻辑。
+ *
+ * 注意：这里故意只用 setTimeout 合并，不用 rAF —— 键盘动画期间 rAF 仍是每帧
+ *       回调一次，合并不到一起；setTimeout 靠 clearTimeout 才能真正压成一次。
+ */
+(function () {
+    'use strict';
+
+    if (window.__viewportGuardInstalled) return;
+    window.__viewportGuardInstalled = true;
+
+    var root = document.documentElement;
+    var timer = 0;
+    var active = false;
+
+    function begin() {
+        if (!active) {
+            active = true;
+            root.classList.add('window-resizing');
+        }
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function () {
+            timer = 0;
+            active = false;
+            root.classList.remove('window-resizing');
+        }, 260);
+    }
+
+    window.addEventListener('resize', begin, { passive: true });
+    window.addEventListener('orientationchange', begin, { passive: true });
+
+    /* WebView / Chrome 在键盘动画时不一定派发 window.resize，
+       但 visualViewport.resize 一定会跟帧触发，补上这一路更稳。 */
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', begin, { passive: true });
+    }
+})();
+
+</script>
     <script data-src="vendor/lib/localforage.min.js">
 /* ===== vendor/lib/localforage.min.js ===== */
 /*!
@@ -767,7 +832,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             background-position: center center;
             background-repeat: no-repeat;
             transition: background-color 0.5s ease;
-            will-change: transform;
         }
 
         .header {
@@ -11039,6 +11103,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         .stats-search-box input:focus {
             border-color: var(--accent-color) !important;
             outline: none;
+        }
+
+        /* ============================================================
+           键盘 / 窗口尺寸变化期间的渲染保护
+           ------------------------------------------------------------
+           安卓 WebView 用 adjustResize 时，软键盘的弹出动画会逐帧改变
+           布局视口高度，站内 20 个 position:fixed 元素与大量 transition
+           会被逐帧重算并反复重启过渡，表现为「弹键盘卡顿 + 页面抖动」。
+
+           这里只把过渡时长压到 0（不删 transition 属性，保证 transitionend
+           照常触发），尺寸稳定 260ms 后由 js/viewport-guard.js 摘掉这个
+           class 恢复。animation 完全不受影响。
+           ============================================================ */
+        html.window-resizing,
+        html.window-resizing *,
+        html.window-resizing *::before,
+        html.window-resizing *::after {
+            transition-duration: 0s !important;
+            transition-delay: 0s !important;
         }
 
 </style>
@@ -50884,8 +50967,23 @@ window.exitCollapseMode = function() {
     function start() {
         run();
         observe();
-        /* 主题切换、弹窗关闭、旋转屏幕之后再校正一次 */
-        window.addEventListener('resize', layoutRelax);
+        /* 主题切换、弹窗关闭、旋转屏幕之后再校正一次
+         *
+         * resize 必须防抖（P35）：安卓 WebView 弹软键盘时 adjustResize 会逐帧派发
+         * resize，而 layoutRelax → layoutFix 里是「overflowed() 读 scrollWidth 再
+         * setProperty 写内联样式」，读-写交替会每帧触发一次强制同步布局（layout
+         * thrashing）。键盘动画十几帧，就把主线程占满了，表现为输入时明显卡顿。
+         * 这里只在尺寸稳定 150ms 后跑一次，效果不变。
+         */
+        var relaxTimer = 0;
+        window.addEventListener('resize', function () {
+            if (relaxTimer) clearTimeout(relaxTimer);
+            relaxTimer = setTimeout(function () {
+                relaxTimer = 0;
+                layoutRelax();
+            }, 150);
+        });
+        /* 旋转屏幕要立刻修正，不能等 */
         window.addEventListener('orientationchange', layoutRelax);
         document.addEventListener('mochi-ext:config', schedule);
         /* 低频巡检：用户换主题是异步渲染的，光靠 MutationObserver 有遗漏 */
