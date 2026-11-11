@@ -1853,12 +1853,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
+            /* 蒙层不做全屏模糊：WebView 里从 display:none 切到可见的那一帧，
+               模糊层要先给背后那一整屏做一次离屏快照，快照常晚一帧才到位，
+               于是先露出"没模糊的半透明黑"，再跳到模糊——观感就是闪一下。
+               Chrome 有预合成优化，所以浏览器里看不到这个现象。
+               去掉模糊后把底色从 0.6 加深到 0.72，层级感基本不变。 */
+            background-color: rgba(0, 0, 0, 0.72);
             z-index: 2000;
             align-items: center;
             justify-content: center;
-            backdrop-filter: blur(8px);
-            animation: modalBgFadeIn 0.3s ease;
+            animation: modalBgFadeIn 0.18s ease;
         }
         @keyframes modalBgFadeIn {
             from {
@@ -42703,7 +42707,8 @@ window.exitCollapseMode = function() {
         '.mx-fd-cbody{position:absolute;left:0;right:0;bottom:0;background:var(--secondary-bg,#fff);',
         'border-radius:18px 18px 0 0;padding:14px 16px calc(env(safe-area-inset-bottom,0px) + 16px);',
         'box-shadow:0 -8px 30px rgba(0,0,0,.18);animation:mxFdUp .22s ease;}',
-        '@keyframes mxFdUp{from{transform:translateY(16px);opacity:.6}to{transform:none;opacity:1}}',
+        /* 只做位移，不做淡入：弹层从第一帧就整块可见，避免"先暗一下再亮起来"的跳变 */
+        '@keyframes mxFdUp{from{transform:translateY(16px)}to{transform:none}}',
         '.mx-fd-chd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}',
         '.mx-fd-chd span{font-size:13.5px;font-weight:700;color:var(--text-primary);}',
         '.mx-fd-cclose{border:none;background:none;font-size:15px;color:var(--text-secondary);cursor:pointer;padding:4px 6px;}',
