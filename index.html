@@ -1362,6 +1362,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         body.immersive-mode .main-chat-area {
             padding-bottom: 80px;
         }
+        /* P40：录音面板出现时把多出来的高度补给聊天区，不然最后一条消息被压在面板下面 */
+        body.voice-panel-open .main-chat-area {
+            padding-bottom: calc(70px + var(--voice-panel-h, 0px) + env(safe-area-inset-bottom, 0px));
+            transition: padding-bottom 0.18s ease;
+        }
+        body.voice-panel-open.immersive-mode .main-chat-area {
+            padding-bottom: calc(80px + var(--voice-panel-h, 0px));
+        }
+        html.window-resizing body.voice-panel-open .main-chat-area {
+            transition-duration: 0s !important;
+        }
         .input-area {
             display: flex;
             padding: 12px 15px;
@@ -1433,11 +1444,251 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             background-color: var(--send-btn-bg, var(--accent-color-dark));
         }
 
-        .coin-btn, .batch-btn, .continue-btn, .attachment-btn, .poke-btn, .combo-btn {
+        /* ===== P40 语音消息：录音按钮 / 录音面板 ===== */
+        /* 320 这种极窄屏：输入区本来就靠逐级收紧才放得下，
+           再塞一个键会把发送键压到 32px。这里直接藏掉，
+           语音入口退到「收起更多」面板里（见 index.html 的 collapsed-extras-panel）。 */
+        @media (max-width: 359px) {
+            .voice-btn { display: none !important; }
+        }
+        /* 手机上语音键比其它键小一圈：它是个次要入口，不该跟发送键抢宽度。
+           加它之前输入框在 390 屏是 78px，加完被挤到 58px —— 3 个字的水平，
+           少 8px 就能拉回到 66px，再往上只能靠减少按钮，不值得。 */
+        @media (max-width: 480px) {
+            .voice-btn {
+                width: 32px !important;
+                min-width: 32px !important;
+                height: 32px !important;
+                font-size: 13px !important;
+                align-self: center;
+            }
+        }
+        .voice-btn.recording {
+            background-color: #ff4d4f !important;
+            color: #fff !important;
+            animation: voiceBtnPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes voiceBtnPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.42); }
+            50%      { box-shadow: 0 0 0 7px rgba(255, 77, 79, 0); }
+        }
+
+        .voice-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            padding: 8px 14px 9px;
+            background-color: var(--secondary-bg);
+            border-top: 1px solid var(--border-color);
+        }
+        .voice-panel[hidden] { display: none; }
+
+        .voice-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+        .voice-icon-btn {
+            width: 32px;
+            height: 32px;
+            flex: 0 0 auto;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            background-color: rgba(var(--accent-color-rgb), 0.14);
+            color: var(--accent-color);
+            transition: background-color 0.2s, transform 0.2s;
+        }
+        .voice-icon-btn:hover { background-color: rgba(var(--accent-color-rgb), 0.24); }
+        .voice-icon-btn[hidden] { display: none; }
+
+        .voice-dot {
+            width: 8px;
+            height: 8px;
+            flex: 0 0 auto;
+            border-radius: 50%;
+            background-color: #ff4d4f;
+            animation: voiceDotBlink 1s steps(2, end) infinite;
+        }
+        .voice-dot.done {
+            animation: none;
+            background-color: var(--accent-color);
+            opacity: 0.65;
+        }
+        @keyframes voiceDotBlink {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.12; }
+        }
+
+        .voice-timer {
+            flex: 0 0 auto;
+            min-width: 36px;
+            font-size: 13px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-primary);
+        }
+        .voice-state {
+            font-size: 11.5px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .voice-wave {
+            flex: 1;
+            min-width: 40px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            overflow: hidden;
+        }
+        .voice-wave span {
+            flex: 1;
+            min-height: 3px;
+            border-radius: 2px;
+            background-color: var(--accent-color);
+            opacity: 0.7;
+        }
+
+        .voice-text-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .voice-text-wrap[hidden] { display: none; }
+        .voice-sub-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        #voice-text {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 8px 10px;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            font-size: 13px;
+            line-height: 1.55;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        #voice-text:focus { border-color: var(--accent-color); }
+        #voice-text::placeholder { color: var(--text-secondary); opacity: 0.8; }
+
+        .voice-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 0 0 auto;
+        }
+        .voice-act {
+            border: 1px solid transparent;
+            border-radius: 9px;
+            padding: 6px 12px;
+            font-family: var(--font-family);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+            transition: background-color 0.2s, color 0.2s, opacity 0.2s;
+            white-space: nowrap;
+        }
+        .voice-act.primary {
+            background-color: var(--accent-color);
+            color: #fff;
+        }
+        .voice-act.primary:hover { opacity: 0.88; }
+        .voice-act.ghost {
+            background-color: transparent;
+            color: var(--text-secondary);
+        }
+        .voice-act.ghost:hover {
+            color: var(--text-primary);
+            background-color: rgba(127, 127, 127, 0.12);
+        }
+        .voice-act[hidden] { display: none; }
+
+        /* ===== P40 语音消息：气泡里的语音条 ===== */
+        .message-voice { padding: 9px 13px; }
+        .voice-bubble {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            min-width: var(--vw, 108px);
+            box-sizing: border-box;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .voice-bubble .voice-ico {
+            flex: 0 0 auto;
+            width: 14px;
+            font-size: 12px;
+            text-align: center;
+            opacity: 0.92;
+        }
+        .voice-bars {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            height: 20px;
+            overflow: hidden;
+        }
+        .voice-bars span {
+            flex: 1;
+            min-height: 4px;
+            border-radius: 2px;
+            background-color: currentColor;
+            opacity: 0.5;
+            transition: opacity 0.12s linear;
+        }
+        .voice-bars span.on { opacity: 0.95; }
+        .voice-dur {
+            flex: 0 0 auto;
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
+            opacity: 0.72;
+        }
+        .voice-text-line {
+            margin-top: 6px;
+            padding-top: 5px;
+            border-top: 1px solid rgba(127, 127, 127, 0.24);
+            font-size: 12.5px;
+            line-height: 1.55;
+            opacity: 0.88;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-word;
+        }
+        .voice-text-line.expanded {
+            display: block;
+            -webkit-line-clamp: unset;
+            overflow: visible;
+        }
+
+        .coin-btn, .batch-btn, .continue-btn, .attachment-btn, .poke-btn, .combo-btn, .voice-btn {
             background-color: var(--toolbar-btn-bg, var(--message-received-bg));
             color: var(--toolbar-btn-color, var(--text-secondary));
         }
-        .attachment-btn:hover, .continue-btn:hover, .batch-btn:hover, .coin-btn:hover, .poke-btn:hover, .combo-btn:hover {
+        .attachment-btn:hover, .continue-btn:hover, .batch-btn:hover, .coin-btn:hover, .poke-btn:hover, .combo-btn:hover, .voice-btn:hover {
             color: var(--text-primary);
         }
 
@@ -1497,13 +1748,18 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             transform: scale(1.1);
         }
 
+        /* P39：引用块自带底色和文字色，不再跟着气泡的「已发送」文字色走。
+           原来 .sent 分支写死白字 + 18% 白底，只要自定义气泡 CSS 把发送气泡
+           改成浅色，整块引用就跟背景糊在一起（用户实测：字是白的，和背景重叠）。
+           现在无论气泡什么颜色，引用都是一块跟着主题走的浅/深色小卡。 */
         .reply-indicator {
             display: flex;
             flex-direction: column;
             border-left: 3px solid var(--accent-color);
             padding: 5px 10px 5px 9px;
             margin-bottom: 7px;
-            background-color: rgba(var(--primary-bg-rgb), 0.55);
+            background-color: rgba(var(--primary-bg-rgb), 0.86);
+            color: var(--text-primary);
             border-radius: 0 8px 8px 0;
             cursor: pointer;
             overflow: hidden;
@@ -1519,14 +1775,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         .reply-indicator-sender {
             font-size: 11px;
             font-weight: 600;
-            color: var(--accent-color);
-            opacity: 1;
+            color: var(--text-primary);
+            opacity: 0.7;
             margin-bottom: 2px;
             letter-spacing: 0.3px;
         }
         .reply-indicator-text {
             font-size: 12px;
-            color: var(--text-secondary);
+            color: var(--text-primary);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -1536,16 +1792,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         }
 
         .message-wrapper.sent .reply-indicator {
-            background-color: rgba(255, 255, 255, 0.18);
-            border-left-color: rgba(255, 255, 255, 0.7);
+            background-color: rgba(var(--primary-bg-rgb), 0.9);
+            border-left-color: var(--accent-color);
         }
         .message-wrapper.sent .reply-indicator-sender {
-            color: var(--message-sent-text, rgba(255, 255, 255, 0.9));
-            opacity: 0.9;
+            color: var(--text-primary);
+            opacity: 0.7;
         }
         .message-wrapper.sent .reply-indicator-text {
-            color: var(--message-sent-text, rgba(255, 255, 255, 0.75));
-            opacity: 0.75;
+            color: var(--text-primary);
+            opacity: 0.88;
         }
         .message-wrapper.reply-jump-flash .message {
             animation: replyJumpFlash 1s ease;
@@ -1555,10 +1811,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             60%  { box-shadow: 0 0 0 7px rgba(var(--accent-color-rgb),0); }
             100% { box-shadow: none; }
         }
-        html[data-theme="dark"] .message-wrapper.sent .reply-indicator {
-            background-color: rgba(0, 0, 0, 0.18);
-            border-left-color: rgba(255,255,255,0.35);
-        }
+        /* 深色主题不再单独压黑：底色/文字都走 --primary-bg-rgb 与 --text-secondary，
+           已经随手动变，这里再叠一层反而会让引用块和气泡糊在一起。 */
         .time-fmt-opt.active {
             border: 1.5px solid var(--accent-color) !important;
             background: rgba(var(--accent-color-rgb), 0.08);
@@ -1862,7 +2116,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             z-index: 2000;
             align-items: center;
             justify-content: center;
-            animation: modalBgFadeIn 0.18s ease;
         }
         @keyframes modalBgFadeIn {
             from {
@@ -1879,27 +2132,46 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             padding: 24px 24px 0;
             width: 90%;
             max-width: 400px;
+            /* 键盘弹起时安卓 WebView 的 adjustResize 会逐帧改 layout viewport 高度，
+               vh 跟着一起缩，卡片每帧变矮一次、内部 flex 逐帧重排。
+               这里没法靠单位回避（WebView 里 vh / dvh / svh 都等于 WebView 高度，
+               键盘一弹全变），所以改成让键盘晚点来：focus 推迟到入场动画之后
+               （见 core.js 的 showModal），别和入场动画撞在同一段里。 */
             max-height: 80vh;
             overflow-y: auto;
             border: 1px solid var(--surface-border);
-            box-shadow: 0 18px 55px rgba(0, 0, 0, 0.24), 0 2px 10px rgba(0, 0, 0, 0.10);
-            animation: modalContentSlideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            /* 55px 的模糊半径在 92vh 高的卡片上等于一整屏的离屏栅格，
+               打开那一帧来不及时就露出空白。收到 26px，观感差别很小。 */
+            box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.10);
+            animation: modalContentSlideIn 0.26s cubic-bezier(0.22, 0.9, 0.3, 1);
             transition: background-color 0.5s ease;
             scrollbar-width: none;
             -ms-overflow-style: none;
-            transform: translateY(20px) scale(0.95);
-            opacity: 0;
+            /* 这里刻意不写 transform 和 opacity。
+               只要 transform 不是 none，卡片就会被提升成独立合成层；
+               元素又是从 display:none 现建的，纹理要现分配 ——
+               WebView 追不上第一帧，卡片会分块重绘、背后的聊天内容透出来。
+               入场位移交给下面的 keyframes（纯合成器位移，不重绘），
+               结束后回到 none，静止态不占层。 */
             display: flex;
             flex-direction: column;
+        }
+        /* 信封投递是整屏高的信纸，比通用弹窗更高。原来是写在内联 style 上的，
+           挪到类里方便统一调。 */
+        .modal-content.env-sheet {
+            max-height: 92vh;
         }
         .modal-content::-webkit-scrollbar {
             display: none;
             width: 0;
         }
         @keyframes modalContentSlideIn {
+            from {
+                transform: translateY(14px);
+            }
+
             to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
+                transform: none;
             }
         }
         .modal-title {
@@ -2483,11 +2755,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
         }
         .modal-content {
-            animation: modalSlideUp 0.32s cubic-bezier(0.34, 1.3, 0.64, 1) !important;
+            animation: modalSlideUp 0.26s cubic-bezier(0.22, 0.9, 0.3, 1) !important;
         }
+        /* 只动 transform，不动 opacity、不做 scale：
+           opacity 从 0 起会让卡片在头一帧"还没亮"，scale 会让靠近全屏的卡片
+           逐帧重算一次栅格（信封那种 92vh 高的卡片最贵）。两者都是 WebView 里
+           "打开闪一下"的常见来源。卡片是否可见由 showModal 在显示前一次性写好。 */
         @keyframes modalSlideUp {
-            from { opacity: 0; transform: translateY(24px) scale(0.96); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
+            from { transform: translateY(14px); }
+            to { transform: none; }
         }
         .ann-item-card, .env-letter-item, .dg-info-cell, .dg-mood-panel {
             transition: transform 0.26s cubic-bezier(0.4,0,0.2,1), box-shadow 0.26s ease !important;
@@ -2580,6 +2856,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             border-radius: var(--radius);
             overflow: hidden;
             display: flex; flex-direction: column;
+            /* 信封盖是 clip-path 裁出来的三角形：卡片高度每变一次就要重新裁剪一次，
+               再叠上内部 flex 重排，就是那阵"整块在抖"。键盘弹起没法避免，
+               但入场阶段已经通过推迟 focus 错开（见 core.js showModal）。 */
             max-height: 88vh;
         }
         .env-header-flap {
@@ -9745,10 +10024,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     transition: 0s;
         }
 
-        @keyframes modalContentSlideIn {
-    from { opacity: 0; transform: translateY(28px) scale(0.93); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-        }
+        /* 这里原本还有一份同名 @keyframes modalContentSlideIn（带 opacity 0 + scale 0.93），
+           位置更靠后，把上面那份纯位移的覆盖掉了 —— 等于白改。已删除，只保留一份。
+           一次性对话框（导出/提示弹窗）用的是同一个动画名，如今同样是纯上浮，
+           不再从透明淡入，观感差别很小，但少了一整块逐帧重栅格化。 */
 
         .settings-item {
     transition: all 0.2s cubic-bezier(0.25,0.8,0.25,1);
@@ -10070,6 +10349,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             overflow: hidden !important;
             display: flex !important;
             flex-direction: column !important;
+            /* dvh 会随键盘逐帧变（设置面板里点搜索框就要弹键盘），
+               WebView 里三种单位都等于 WebView 高度，换单位没用，所以维持原样。 */
             height: 93dvh !important;
             max-height: 93dvh !important;
             min-height: 200px !important;
@@ -10079,15 +10360,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             margin: 0 auto !important;
             box-shadow: 0 -8px 40px rgba(0,0,0,0.18) !important;
             background: var(--primary-bg) !important;
-            will-change: transform, opacity;
-            animation: dmSheetIn 0.38s cubic-bezier(0.32,0.72,0,1) both !important;
-            transform: translateY(0) !important;
-            opacity: 1 !important;
+            /* 原来这里挂着 will-change: transform,opacity + 常驻 translateY(0)，
+               等于每次打开都要求浏览器常驻一块整屏大的合成层纹理；
+               再叠 from{opacity:0} 的入场，就是面板打开时"先虚一下再亮"。
+               现在只保留位移动画，结束后回到 none，静止态不占层。 */
+            animation: dmSheetIn 0.26s cubic-bezier(0.32,0.72,0,1) !important;
         }
 
         @keyframes dmSheetIn {
-            from { transform: translateY(60px); opacity: 0; }
-            to   { transform: translateY(0);    opacity: 1; }
+            from { transform: translateY(40px); }
+            to   { transform: none; }
         }
 
         .dm-topbar {
@@ -11415,6 +11697,27 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     <div class="input-area-wrapper">
         <div class="batch-preview" id="batch-preview"></div>
         <div id="reply-preview-container"></div>
+        <div class="voice-panel" id="voice-panel" hidden>
+            <div class="voice-row">
+                <button class="voice-icon-btn" id="voice-preview-btn" title="试听" hidden><i class="fas fa-play"></i></button>
+                <span class="voice-dot" id="voice-dot"></span>
+                <span class="voice-timer" id="voice-timer">0:00</span>
+                <div class="voice-wave" id="voice-wave"></div>
+                <div class="voice-actions">
+                    <button class="voice-act ghost" id="voice-cancel">取消</button>
+                    <button class="voice-act primary" id="voice-stop">停止</button>
+                    <button class="voice-act primary" id="voice-send" hidden>发送</button>
+                </div>
+            </div>
+            <div class="voice-text-wrap" id="voice-text-wrap" hidden>
+                <div class="voice-state" id="voice-state">已录好，可以试听</div>
+                <textarea id="voice-text" rows="2" placeholder="说出来的话会自动转成文字，也可以直接改"></textarea>
+                <div class="voice-sub-actions">
+                    <button class="voice-act ghost" id="voice-redo" hidden>重录</button>
+                    <button class="voice-act ghost" id="voice-send-text" hidden>只发文字</button>
+                </div>
+            </div>
+        </div>
         <div id="collapsed-extras-panel" style="display:none;">
             <div class="collapsed-extras-inner" style="padding:12px; background:var(--secondary-bg); border-top:1px solid var(--border-color);">
                 <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;">
@@ -11426,6 +11729,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
                     </button>
                     <button class="collapsed-extra-btn" id="batch-btn-extra" title="批量发送">
                         <i class="fas fa-layer-group"></i>
+                    </button>
+                    <button class="collapsed-extra-btn" title="发送语音" onclick="(function(){document.getElementById('collapsed-extras-panel').style.display='none';document.getElementById('collapse-expand-btn').classList.remove('open');if(window.Voice)window.Voice.start();})();">
+                        <i class="fas fa-microphone"></i>
                     </button>
                     <button class="collapsed-extra-btn" title="字卡回复" onclick="(function(){document.getElementById('collapsed-extras-panel').style.display='none';document.getElementById('collapse-expand-btn').classList.remove('open');showModal(document.getElementById('custom-replies-modal'));})();">
                         <i class="fas fa-comment-dots"></i>
@@ -11453,6 +11759,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     <textarea class="message-input" id="message-input" placeholder="" rows="1"></textarea>
     
     <div class="input-buttons">
+    <button class="voice-btn input-btn collapse-hideable" id="voice-btn" title="发送语音"><i class="fas fa-microphone"></i></button>
     <button class="continue-btn input-btn" id="continue-btn" title="让对方继续说"><i class="fas fa-ellipsis-h"></i></button>
         <button class="batch-btn input-btn collapse-hideable" id="batch-btn" title="批量发送模式"><i class="fas fa-layer-group"></i></button>
         <button class="send-btn input-btn" id="send-btn" title="发送消息"><i class="fas fa-paper-plane"></i></button>
@@ -11525,7 +11832,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         </div>
     </div>
 <div class="modal" id="envelope-modal">
-    <div class="modal-content" style="max-height:92vh; padding:0; overflow:hidden; background:transparent;">
+    <div class="modal-content env-sheet" style="padding:0; overflow:hidden; background:transparent;">
     <div class="env-wrapper">
         <div class="env-header-flap">
             <svg class="env-header-icon" width="40" height="30" viewBox="0 0 40 30" fill="none">
@@ -15771,6 +16078,8 @@ function deduplicateContentArray(arr, baseSystemArray = []) {
         };
 
         const playSound = (type) => {
+            // P40：音效响起时先把正在播放的语音消息停掉，避免两条声音叠在一起
+            try { if (window.Voice && window.Voice.pausePlayback) window.Voice.pausePlayback(); } catch (e) { }
             if (!settings.soundEnabled) return;
             stopCurrentSound();
             try {
@@ -18347,21 +18656,23 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
 
     let messageHTML = '';
     if (msg.replyTo) {
-        const repliedText = msg.replyTo.text || (msg.replyTo.image ? '🖼 图片' : '[消息]');
+        const repliedText = msg.replyTo.text || (msg.replyTo.voice ? '🎤 语音' : (msg.replyTo.image ? '🖼 图片' : '[消息]'));
         const repliedSender = msg.replyTo.sender === 'user' ? (settings.myName || '我') : (settings.partnerName || '对方');
         messageHTML += `<div class="reply-indicator" data-reply-id="${msg.replyTo.id || ''}" style="cursor:pointer;" onclick="scrollToQuotedMessage(this)"><span class="reply-indicator-sender">${repliedSender}</span><span class="reply-indicator-text">${repliedText}</span></div>`;
     }
 
-    const isImageOnly = !msg.text && !!msg.image;
+    const hasVoice = !!(window.Voice && msg.voice);
+    const isImageOnly = !msg.text && !!msg.image && !hasVoice;
     let content = msg.text ? `<div>${msg.text.replace(/\n/g, '<br>')}</div>` : '';
     if (msg.image) content += `<img src="${msg.image}" class="message-image${isImageOnly ? ' message-image-only' : ''}" alt="图片" style="max-width:${isImageOnly ? '100px' : '100px'}; border-radius: 12px;${!isImageOnly ? ' margin-top: 6px;' : ''} cursor: pointer;" onclick="viewImage(this.src)">`;
+    if (hasVoice) content += window.Voice.bubbleHTML(msg);
     messageHTML += content;
 
     const messageDiv = document.createElement('div');
     if (isImageOnly) {
         messageDiv.className = `message message-${msg.sender === 'user' ? 'sent' : 'received'} message-image-bubble-none`;
     } else {
-        messageDiv.className = `message message-${msg.sender === 'user' ? 'sent' : 'received'} ${settings.bubbleStyle}`;
+        messageDiv.className = `message message-${msg.sender === 'user' ? 'sent' : 'received'} ${settings.bubbleStyle}${hasVoice ? ' message-voice' : ''}`;
     }
     messageDiv.innerHTML = messageHTML;
 
@@ -18598,7 +18909,9 @@ const addMessage = (message) => {
                 return;
             }
             const senderName = currentReplyTo.sender === 'user' ? (settings.myName || '我') : (settings.partnerName || '对方');
-            const previewText = currentReplyTo.text ? currentReplyTo.text.slice(0, 40) : '🖼 图片';
+            const previewText = currentReplyTo.text
+                ? currentReplyTo.text.slice(0, 40)
+                : (currentReplyTo.voice ? '🎤 语音' : '🖼 图片');
             container.style.display = 'flex';
             container.innerHTML = `
                 <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(var(--accent-color-rgb),0.07);border-left:3px solid var(--accent-color);border-radius:0 8px 8px 0;width:100%;">
@@ -18661,10 +18974,13 @@ const addMessage = (message) => {
             (function(){try{if(window._typingIndicatorAutoHideTimer){clearTimeout(window._typingIndicatorAutoHideTimer);window._typingIndicatorAutoHideTimer=null;}}catch(e){}var _tiW=document.getElementById('typing-indicator-wrapper');if(_tiW){var _tiInner=_tiW.querySelector('.typing-indicator');if(_tiInner){_tiInner.classList.add('hiding');setTimeout(function(){_tiW.style.display='none';if(_tiInner)_tiInner.classList.remove('hiding');},240);}else{_tiW.style.display='none';}}})();
         };
 
-        function sendMessage(textOverride = null, type = 'normal') {
-            const text = textOverride || DOMElements.messageInput.value.trim();
+        function sendMessage(textOverride = null, type = 'normal', extra = null) {
+            // P40：语音消息走同一条发送链路（延迟回复、已读回执、音效都一样），
+            // 只是多带一份音频数据进来，并且不吃输入框里的草稿。
+            const isVoiceSend = !!(extra && extra.voice);
+            const text = isVoiceSend ? '' : (textOverride || DOMElements.messageInput.value.trim());
             const imageFile = DOMElements.imageInput.files[0];
-            if (!text && !imageFile && type === 'normal') return;
+            if (!text && !imageFile && !isVoiceSend && type === 'normal') return;
 
             // ── 斜杠指令拦截 ──
             if (text && text.startsWith('/') && type === 'normal') {
@@ -18685,8 +19001,10 @@ const addMessage = (message) => {
                 }
             }
 
-            DOMElements.messageInput.value = '';
-            DOMElements.messageInput.style.height = '46px';
+            if (!isVoiceSend) {
+                DOMElements.messageInput.value = '';
+                DOMElements.messageInput.style.height = '46px';
+            }
             if (imageFile && imageFile.size > MAX_IMAGE_SIZE) {
                 showNotification('图片大小不能超过5MB', 'error'); DOMElements.imageInput.value = ''; return;
             }
@@ -18704,6 +19022,7 @@ const addMessage = (message) => {
                     replyTo: currentReplyTo,
                     type: type
                 };
+                if (extra) Object.assign(messageData, extra);
                 if (type === 'system') messageData.sender = null;
 
                 addMessage(messageData);
@@ -18952,7 +19271,7 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
             showTypingIndicator();
             let delay = 0;
             const recentUserMsgs = settings.replyEnabled
-                ? messages.filter(m => m.sender === 'user' && m.text).slice(-10)
+                ? messages.filter(m => m.sender === 'user' && (m.text || m.voiceText)).slice(-10)
                 : [];
             for (let i = 0; i < replyCount; i++) {
                 const delayRange = settings.replyDelayMax - settings.replyDelayMin;
@@ -19004,7 +19323,7 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                         favorited: false,
                         note: null,
                         replyTo: (i === 0 && recentUserMsgs.length > 0 && Math.random() < 0.3)
-                            ? (function(){ const m = recentUserMsgs[Math.floor(Math.random() * recentUserMsgs.length)]; return { id: m.id, text: m.text, sender: m.sender }; })()
+                            ? (function(){ const m = recentUserMsgs[Math.floor(Math.random() * recentUserMsgs.length)]; return { id: m.id, text: m.text || m.voiceText || '', sender: m.sender, voice: !!m.voice }; })()
                             : null,
                         type: 'normal'
                     });
@@ -19093,29 +19412,37 @@ function showModal(modalElement, focusElement = null) {
                 clearTimeout(modalElement._hideTimeout);
                 modalElement._hideTimeout = null;
             }
+            /* 刻意不往内容层写内联 transform / opacity。
+               只要 transform 不是 none，卡片就会被提升成独立合成层，而它又是
+               从 display:none 现建的 —— 纹理要现分配，WebView 常常赶不上第一帧，
+               表现就是卡片分块重绘、背后的聊天内容透出来（信封投递最明显）。
+               入场位移交给 CSS 的 translateY 动画：纯合成器位移，不重绘，
+               结束后回到 none，静止态不占层。 */
+            const content = modalElement.querySelector('.modal-content');
+            if (content) {
+                if (content.style.opacity) content.style.opacity = '';
+                if (content.style.transform) content.style.transform = '';
+            }
             modalElement.style.display = 'flex';
-            requestAnimationFrame(() => {
-                const content = modalElement.querySelector('.modal-content');
-                if (content) {
-                    content.style.opacity = '1';
-                    content.style.transform = 'translateY(0) scale(1)';
-                }
-                if (focusElement) {
-                    setTimeout(() => focusElement.focus(), 100);
-                }
-            });
+            /* 等入场动画（260ms）跑完再聚焦。原来 100ms 就 focus，键盘正好在
+               卡片动画中途弹起，两套重排叠在一起 —— 那一下最花。 */
+            if (focusElement) {
+                setTimeout(() => focusElement.focus(), 300);
+            }
         }
 
         function hideModal(modalElement) {
+            /* 关闭侧同样不写 transform：写了就得为一次"即将消失"的卡片建层，
+               反而拖慢关闭。直接延时收起，干脆且不闪。 */
             const content = modalElement.querySelector('.modal-content');
             if (content) {
-                content.style.opacity = '0';
-                content.style.transform = 'translateY(20px) scale(0.95)';
+                if (content.style.opacity) content.style.opacity = '';
+                if (content.style.transform) content.style.transform = '';
             }
             if (modalElement._hideTimeout) clearTimeout(modalElement._hideTimeout);
             modalElement._hideTimeout = setTimeout(() => {
                 modalElement.style.display = 'none';
-            }, 300);
+            }, 160);
         }
 
         function viewImage(src) {
@@ -28650,9 +28977,8 @@ function showPokeTab() {
             z-index: 9999;
             align-items: center;
             justify-content: center;
-            backdrop-filter: blur(8px);
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.18s ease;
             `;
 
                 modal.innerHTML = `
@@ -28665,9 +28991,8 @@ function showPokeTab() {
             width: 90%;
             max-width: 400px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            transform: translateY(20px);
             opacity: 0;
-            transition: all 0.3s ease;
+            transition: opacity 0.18s ease;
             ">
             <div class="modal-title"><i class="fas fa-image"></i><span>发送图片</span></div>
             <div style="margin-bottom: 16px;">
@@ -28695,7 +29020,6 @@ function showPokeTab() {
                     modal.style.opacity = '1';
                     const content = modal.querySelector('.modal-content');
                     content.style.opacity = '1';
-                    content.style.transform = 'translateY(0)';
                 }, 10);
 
                 const fileInput = document.getElementById('image-file-input');
@@ -28828,13 +29152,12 @@ function showPokeTab() {
                     modal.style.opacity = '0';
                     const content = modal.querySelector('.modal-content');
                     content.style.opacity = '0';
-                    content.style.transform = 'translateY(20px)';
                     setTimeout(() => {
                         if (modal.parentNode) {
                             modal.parentNode.removeChild(modal);
                         }
                     },
-                        300);
+                        180);
                 }
 
 
@@ -30271,8 +30594,10 @@ window.tryShowDailyGreeting = function() {
         if (!mc) return;
         ensureHTML(mc);
         requestAnimationFrame(function () {
-            mc.style.opacity = '1';
-            mc.style.transform = 'none';
+            /* 不写内联 transform / opacity：非 none 的 transform 会把卡片提升成
+               独立合成层，从 display:none 现建时纹理赶不上第一帧就会闪。 */
+            if (mc.style.opacity) mc.style.opacity = '';
+            if (mc.style.transform) mc.style.transform = '';
         });
         setTimeout(function () {
             updateStats();
@@ -31707,7 +32032,8 @@ if (target.classList.contains('delete-btn')) {
                     currentReplyTo = {
                         id: message.id,
                         sender: message.sender,
-                        text: message.text
+                        text: message.text,
+                        voice: !!message.voice
                     };
                     updateReplyPreview();
                     DOMElements.messageInput.focus();
@@ -35319,6 +35645,808 @@ window.exitCollapseMode = function() {
 })();
 
 </script>
+    <script data-src="js/voice.js">
+/* ===== js/voice.js ===== */
+/* P40 语音消息：录音 → 试听 → 发送；能转文字就转，转不了也能发
+ *
+ * 设计约束（都是踩过的坑）：
+ *   1. 只做「我方」发语音，TA 那边不动 —— 这个站是单机模拟，没有真实的对方。
+ *   2. 语音条的颜色一律 currentColor，跟着气泡文字色走。
+ *      P39 的教训：把可读性绑死在某个具体色值上，用户换个气泡色就会糊成一片。
+ *   3. 录音结果存 data URL，交给 MediaStore 外置（它认 data:audio）。
+ *      不存 blob: URL —— 换个页面就失效。
+ *   4. 只要拿不到麦克风权限/编码器/安全上下文，一律给一条明确的提示，
+ *      不做「点了没反应」。
+ *   5. 语音转文字优先用浏览器自带的 SpeechRecognition。
+ *      WebView 里这个 API 基本不可用（没有语音服务），所以「转不了」是常态，
+ *      此时退回「手打一句」，绝不阻塞发送语音。
+ */
+(function () {
+    'use strict';
+
+    var MAX_SEC = 60;       // 最长录音
+    var MIN_SEC = 0.7;      // 短于这个当作误触
+    var LIVE_BARS = 26;     // 面板上的实时波形柱数
+    var BUBBLE_BARS = 24;   // 气泡里的波形柱数
+
+    var SRC = {};           // 消息 id -> 音频 data URL（渲染时登记，避免塞进 DOM 属性）
+
+    var els = {};
+    var st = {
+        mode: 'idle',       // idle | recording | reviewing
+        rec: null,
+        stream: null,
+        chunks: [],
+        startedAt: 0,
+        tick: null,
+        analyser: null,
+        actx: null,
+        buf: null,
+        samples: [],
+        blob: null,
+        url: '',
+        dur: 0,
+        asr: null,
+        asrFinal: '',
+        asrInterim: '',
+        asrDead: false,     // 试过但不可用
+        asrTried: false,
+        asrRestart: 0,
+        asrWatch: null,
+        stopping: false,
+        pendingStop: false,
+        playEl: null,
+        playAudio: null
+    };
+
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+
+    function $(id) { return document.getElementById(id); }
+
+    function fmt(sec) {
+        sec = Math.max(0, Math.floor(sec));
+        var m = Math.floor(sec / 60);
+        var s = sec % 60;
+        return m + ':' + (s < 10 ? '0' + s : s);
+    }
+
+    function toast(msg, kind, ms) {
+        if (typeof showNotification === 'function') showNotification(msg, kind || 'info', ms || 2600);
+    }
+
+    function pickMime() {
+        if (typeof MediaRecorder === 'undefined') return '';
+        var list = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4',
+            'audio/ogg;codecs=opus',
+            'audio/aac'
+        ];
+        for (var i = 0; i < list.length; i++) {
+            try {
+                if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(list[i])) return list[i];
+            } catch (e) { }
+        }
+        return '';
+    }
+
+    function supported() {
+        return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof MediaRecorder !== 'undefined');
+    }
+
+    /* ───────────────────────── 面板 ───────────────────────── */
+
+    function renderLiveBars(values) {
+        var host = els.wave;
+        if (!host) return;
+        var n = LIVE_BARS;
+        var html = '';
+        for (var i = 0; i < n; i++) {
+            var v = values && values.length ? (values[i] || 0) : 4;
+            var h = Math.max(10, Math.min(100, v));
+            html += '<span style="height:' + h.toFixed(0) + '%"></span>';
+        }
+        host.innerHTML = html;
+    }
+
+    /* 输入区是 position:fixed 的，录音面板一撑高就会盖住最后一条消息。
+       聊天区的 padding-bottom 是写死的 70px，所以这里把多出来的高度补回去。 */
+    function syncChatPadding() {
+        var h = els.panel && !els.panel.hidden ? els.panel.offsetHeight : 0;
+        document.documentElement.style.setProperty('--voice-panel-h', h + 'px');
+        document.body.classList.toggle('voice-panel-open', h > 0);
+        var c = document.getElementById('chat-container');
+        if (c && h > 0) {
+            requestAnimationFrame(function () {
+                try { c.scrollTop = c.scrollHeight; } catch (e) { }
+            });
+        }
+    }
+
+    function openPanel() {
+        if (!els.panel) return;
+        els.panel.hidden = false;
+        if (els.btn) els.btn.classList.add('recording');
+        syncChatPadding();
+    }
+
+    function closePanel() {
+        if (!els.panel) return;
+        els.panel.hidden = true;
+        if (els.btn) els.btn.classList.remove('recording');
+        syncChatPadding();
+    }
+
+    function setPhase(phase) {
+        // phase: 'recording' | 'reviewing'
+        var reviewing = phase === 'reviewing';
+        if (els.cancel) els.cancel.hidden = false;
+        if (els.stop) els.stop.hidden = reviewing;
+        if (els.redo) els.redo.hidden = !reviewing;
+        if (els.send) els.send.hidden = !reviewing;
+        if (els.sendText && !reviewing) els.sendText.hidden = true;
+        if (els.preview) els.preview.hidden = !reviewing;
+        if (els.textWrap) els.textWrap.hidden = !reviewing;
+        if (els.dot) {
+            els.dot.classList.toggle('done', reviewing);
+            els.dot.hidden = reviewing;
+        }
+        if (els.btn) els.btn.classList.toggle('recording', !reviewing);
+        // 面板高度在两种状态之间不一样，等浏览器算完再补留白
+        setTimeout(syncChatPadding, 0);
+    }
+
+    function setStateText(t) {
+        if (els.state) els.state.textContent = t;
+    }
+
+    function updateTimer() {
+        var sec = (Date.now() - st.startedAt) / 1000;
+        if (els.timer) els.timer.textContent = fmt(sec);
+        if (sec >= MAX_SEC) stop();
+    }
+
+    /* ───────────────────────── 录音 ───────────────────────── */
+
+    function start() {
+        if (st.mode !== 'idle') return;
+        if (els.batchBtn && els.batchBtn.classList.contains('active')) {
+            toast('批量模式下不能发语音，先退出批量', 'info');
+            return;
+        }
+        if (!supported()) {
+            toast('这个环境不支持录音：需要 https 页面，且浏览器要允许麦克风', 'error', 4200);
+            return;
+        }
+        if (document.activeElement && document.activeElement.blur) {
+            try { document.activeElement.blur(); } catch (e) { }
+        }
+
+        st.mode = 'starting';
+        st.chunks = [];
+        st.samples = [];
+        st.blob = null;
+        st.dur = 0;
+        st.pendingStop = false;
+        st.asrFinal = '';
+        st.asrInterim = '';
+        st.asrDead = false;
+        st.asrTried = false;
+        st.asrRestart = 0;
+
+        navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        }).then(onStream).catch(function (err) {
+            st.mode = 'idle';
+            closePanel();
+            var name = err && err.name ? err.name : '';
+            if (name === 'NotAllowedError' || name === 'SecurityError') {
+                toast('麦克风权限被拒绝，请在浏览器/App 设置里允许录音', 'error', 4200);
+            } else if (name === 'NotFoundError') {
+                toast('没找到麦克风设备', 'error', 3600);
+            } else {
+                toast('打不开麦克风：' + (err && err.message ? err.message : '未知错误'), 'error', 4200);
+            }
+        });
+    }
+
+    function onStream(stream) {
+        st.stream = stream;
+        var mime = pickMime();
+        var rec;
+        try {
+            rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        } catch (e) {
+            try { rec = new MediaRecorder(stream); } catch (e2) {
+                releaseStream();
+                st.mode = 'idle';
+                closePanel();
+                toast('这个浏览器不支持录音编码', 'error', 3600);
+                return;
+            }
+        }
+
+        st.rec = rec;
+        st.mode = 'recording';
+        st.stopping = false;
+        st.startedAt = Date.now();
+
+        rec.ondataavailable = function (ev) {
+            if (ev.data && ev.data.size) st.chunks.push(ev.data);
+        };
+        rec.onstop = onRecStop;
+        rec.onerror = function (ev) {
+            console.warn('[voice] recorder error', ev);
+        };
+
+        try { rec.start(200); } catch (e) { }
+
+        // 音量分析：实时波形 + 结尾保存一条静态波形
+        try {
+            var AC = window.AudioContext || window.webkitAudioContext;
+            var actx = new AC();
+            var srcNode = actx.createMediaStreamSource(stream);
+            var an = actx.createAnalyser();
+            an.fftSize = 512;
+            an.smoothingTimeConstant = 0.55;
+            srcNode.connect(an);
+            st.actx = actx;
+            st.analyser = an;
+            st.buf = new Uint8Array(an.fftSize);
+        } catch (e) {
+            st.analyser = null;
+        }
+
+        openPanel();
+        setPhase('recording');
+        setStateText(SR ? '正在录音 · 同步识别' : '正在录音');
+        if (els.timer) els.timer.textContent = '0:00';
+        renderLiveBars(null);
+
+        st.tick = setInterval(function () {
+            updateTimer();
+            sampleVolume();
+        }, 100);
+
+        if (st.actx && st.actx.state === 'suspended') {
+            try { st.actx.resume(); } catch (e) { }
+        }
+
+        startASR();
+
+        // 松手比「麦克风就绪」还早：等它起来立刻收尾，别让用户对着空气录到 60 秒
+        if (st.pendingStop) {
+            st.pendingStop = false;
+            setTimeout(function () { if (st.mode === 'recording') stop(); }, 0);
+        }
+    }
+
+    function sampleVolume() {
+        var an = st.analyser;
+        if (!an) {
+            // 没有分析器也要给出一点动静，否则面板像卡住
+            st.samples.push(18 + Math.random() * 26);
+            renderLiveBars(st.samples.slice(-LIVE_BARS));
+            return;
+        }
+        try {
+            an.getByteTimeDomainData(st.buf);
+            var sum = 0;
+            for (var i = 0; i < st.buf.length; i++) {
+                var v = (st.buf[i] - 128) / 128;
+                sum += v * v;
+            }
+            var rms = Math.sqrt(sum / st.buf.length);      // 0 ~ 1
+            var pct = Math.min(100, Math.round(rms * 320)); // 说话时大约 20~70
+            st.samples.push(Math.max(6, pct));
+        } catch (e) {
+            st.samples.push(16);
+        }
+        renderLiveBars(st.samples.slice(-LIVE_BARS));
+    }
+
+    function stop() {
+        if (st.mode !== 'recording' || st.stopping) return;
+        st.stopping = true;
+        if (st.tick) { clearInterval(st.tick); st.tick = null; }
+        st.dur = (Date.now() - st.startedAt) / 1000;
+        try { if (st.rec && st.rec.state !== 'inactive') st.rec.stop(); } catch (e) { onRecStop(); }
+        stopASR();
+    }
+
+    function onRecStop() {
+        releaseStream();
+        var mime = (st.rec && st.rec.mimeType) || 'audio/webm';
+        var blob = null;
+        try {
+            blob = new Blob(st.chunks, { type: mime.split(';')[0] || 'audio/webm' });
+        } catch (e) {
+            blob = null;
+        }
+        st.rec = null;
+        st.chunks = [];
+
+        if (!blob || !blob.size || st.dur < MIN_SEC) {
+            cleanup(true);
+            if (!blob || !blob.size) toast('没录到声音，再试一次？', 'info');
+            else toast('说话时间太短', 'info', 1800);
+            return;
+        }
+
+        st.blob = blob;
+        try {
+            if (st.url) URL.revokeObjectURL(st.url);
+            st.url = URL.createObjectURL(blob);
+        } catch (e) { st.url = ''; }
+
+        st.mode = 'reviewing';
+        setPhase('reviewing');
+        if (els.timer) els.timer.textContent = fmt(Math.max(1, Math.round(st.dur)));
+        setStateText('已录好，可以试听');
+        renderLiveBars(st.samples.slice(-LIVE_BARS));
+        if (els.text) {
+            els.text.value = (st.asrFinal + st.asrInterim).trim();
+            els.text.placeholder = st.asrDead || !SR
+                ? '这个环境不能自动转文字，可以手打一句（留空就只发语音）'
+                : '说出来的话会自动转成文字，也可以直接改';
+        }
+        syncSendTextBtn();
+        if (els.text) {
+            try { els.text.focus({ preventScroll: true }); } catch (e) { }
+        }
+    }
+
+    function releaseStream() {
+        try {
+            if (st.stream) st.stream.getTracks().forEach(function (t) { t.stop(); });
+        } catch (e) { }
+        st.stream = null;
+        try {
+            if (st.actx && st.actx.state !== 'closed') st.actx.close();
+        } catch (e) { }
+        st.actx = null;
+        st.analyser = null;
+    }
+
+    function cleanup(keepPanelClosed) {
+        if (st.tick) { clearInterval(st.tick); st.tick = null; }
+        stopASR();
+        releaseStream();
+        stopPlayback();
+        if (st.url) {
+            try { URL.revokeObjectURL(st.url); } catch (e) { }
+            st.url = '';
+        }
+        st.blob = null;
+        st.chunks = [];
+        st.samples = [];
+        st.dur = 0;
+        st.rec = null;
+        st.mode = 'idle';
+        st.stopping = false;
+        st.asrFinal = '';
+        st.asrInterim = '';
+        if (els.text) els.text.value = '';
+        if (els.preview) {
+            els.preview.innerHTML = '<i class="fas fa-play"></i>';
+        }
+        if (keepPanelClosed !== false) closePanel();
+    }
+
+    function cancel() {
+        var wasRecording = st.mode === 'recording';
+        if (wasRecording) {
+            // 先把录制器停掉，再去清理，避免 onstop 回调把面板又拉回来
+            st.stopping = true;
+            try { if (st.rec && st.rec.state !== 'inactive') st.rec.stop(); } catch (e) { }
+        }
+        cleanup(true);
+    }
+
+    /* ───────────────────────── 语音转文字 ───────────────────────── */
+
+    function startASR() {
+        if (!SR) { st.asrDead = true; return; }
+        if (st.asrTried) return;
+        st.asrTried = true;
+        var r;
+        try {
+            r = new SR();
+        } catch (e) {
+            st.asrDead = true;
+            return;
+        }
+        r.lang = 'zh-CN';
+        r.continuous = true;
+        r.interimResults = true;
+        r.maxAlternatives = 1;
+
+        r.onresult = function (ev) {
+            if (st.asrWatch) { clearTimeout(st.asrWatch); st.asrWatch = null; }
+            var fin = '';
+            var interim = '';
+            for (var i = ev.resultIndex; i < ev.results.length; i++) {
+                var res = ev.results[i];
+                if (res.isFinal) fin += res[0].transcript;
+                else interim += res[0].transcript;
+            }
+            if (fin) st.asrFinal = (st.asrFinal + fin).trim();
+            st.asrInterim = interim || '';
+            var live = (st.asrFinal + st.asrInterim).trim();
+            if (st.mode === 'recording') {
+                setStateText(live ? '识别：' + live.slice(-18) : '正在录音 · 同步识别');
+            } else if (st.mode === 'reviewing') {
+                if (els.text && !els.text.value.trim()) els.text.value = live;
+                syncSendTextBtn();
+            }
+        };
+        r.onerror = function (ev) {
+            var e = ev && ev.error ? ev.error : '';
+            if (e === 'no-speech' || e === 'aborted') return;
+            st.asrDead = true;
+            if (st.mode === 'recording') setStateText('这个环境不能自动转文字');
+            if (st.mode === 'reviewing' && els.text) {
+                els.text.placeholder = '这个环境不能自动转文字，可以手打一句（留空就只发语音）';
+            }
+            console.warn('[voice] 语音识别不可用:', e);
+        };
+        r.onend = function () {
+            // Chrome 的 continuous 也会在停顿后自己结束，录音还没停就再拉起来
+            if (st.mode === 'recording' && !st.asrDead && st.asrRestart < 4) {
+                st.asrRestart++;
+                try { r.start(); } catch (e) { }
+            }
+        };
+
+        st.asr = r;
+        try {
+            r.start();
+        } catch (e) {
+            st.asrDead = true;
+            st.asr = null;
+            return;
+        }
+
+        // 6 秒还没有一个字：多半是 WebView / 无网络，识别服务根本连不上。
+        // 与其一直挂着「同步识别」骗人，不如老实说转不了，让用户手打或直接发。
+        if (st.asrWatch) clearTimeout(st.asrWatch);
+        st.asrWatch = setTimeout(function () {
+            st.asrWatch = null;
+            if (st.mode !== 'recording' || st.asrDead) return;
+            if (st.asrFinal || st.asrInterim) return;
+            st.asrDead = true;
+            setStateText('正在录音（这个环境不能转文字）');
+            stopASR();
+        }, 6000);
+    }
+
+    function stopASR() {
+        if (st.asrWatch) { clearTimeout(st.asrWatch); st.asrWatch = null; }
+        var r = st.asr;
+        st.asr = null;
+        if (!r) return;
+        try { r.onend = null; } catch (e) { }
+        try { r.stop(); } catch (e) { }
+    }
+
+    function syncSendTextBtn() {
+        if (!els.sendText) return;
+        var has = !!(els.text && els.text.value.trim());
+        els.sendText.hidden = !has || st.mode !== 'reviewing';
+    }
+
+    /* ───────────────────────── 试听 / 发送 ───────────────────────── */
+
+    function togglePreview() {
+        if (st.mode !== 'reviewing' || !st.url) return;
+        if (st.playAudio && !st.playAudio.paused) {
+            stopPlayback();
+            els.preview.innerHTML = '<i class="fas fa-play"></i>';
+            return;
+        }
+        stopPlayback();
+        var a = new Audio(st.url);
+        st.playAudio = a;
+        a.onended = function () {
+            if (els.preview) els.preview.innerHTML = '<i class="fas fa-play"></i>';
+            st.playAudio = null;
+        };
+        a.play().catch(function () { });
+        els.preview.innerHTML = '<i class="fas fa-pause"></i>';
+    }
+
+    function waveInts(samples) {
+        if (!samples || !samples.length) return [];
+        var out = [];
+        for (var i = 0; i < BUBBLE_BARS; i++) {
+            var from = Math.floor(i * samples.length / BUBBLE_BARS);
+            var to = Math.max(from + 1, Math.floor((i + 1) * samples.length / BUBBLE_BARS));
+            var sum = 0, n = 0;
+            for (var j = from; j < to && j < samples.length; j++) { sum += samples[j]; n++; }
+            out.push(Math.max(6, Math.min(100, Math.round(n ? sum / n : 10))));
+        }
+        return out;
+    }
+
+    function toDataURL(blob) {
+        return new Promise(function (resolve, reject) {
+            try {
+                var fr = new FileReader();
+                fr.onload = function () { resolve(String(fr.result || '')); };
+                fr.onerror = function () { reject(new Error('read failed')); };
+                fr.readAsDataURL(blob);
+            } catch (e) { reject(e); }
+        });
+    }
+
+    function send() {
+        if (st.mode !== 'reviewing' || !st.blob) return;
+        var txt = els.text ? (els.text.value || '').trim() : '';
+        var dur = Math.max(1, Math.round(st.dur));
+        var wave = waveInts(st.samples);
+        var blob = st.blob;
+        if (els.send) els.send.disabled = true;
+
+        toDataURL(blob).then(function (url) {
+            if (!url) throw new Error('empty');
+            if (typeof sendMessage !== 'function') throw new Error('sendMessage missing');
+            sendMessage('', 'normal', {
+                voice: url,
+                voiceDur: dur,
+                voiceText: txt,
+                voiceWave: wave
+            });
+            cleanup(true);
+        }).catch(function (e) {
+            console.error('[voice] 发送失败', e);
+            toast('语音发送失败，再试一次？', 'error', 3200);
+        }).then(function () {
+            if (els.send) els.send.disabled = false;
+        });
+    }
+
+    function sendTextOnly() {
+        var txt = els.text ? (els.text.value || '').trim() : '';
+        if (!txt) { toast('还没有文字内容', 'info', 1800); return; }
+        cleanup(true);
+        if (typeof sendMessage === 'function') sendMessage(txt);
+    }
+
+    /* ───────────────────────── 气泡渲染与播放 ───────────────────────── */
+
+    function barsFromWave(wave, seed) {
+        var out = [];
+        var i;
+        if (Array.isArray(wave) && wave.length) {
+            for (i = 0; i < BUBBLE_BARS; i++) {
+                var p = wave.length === 1 ? 0 : i / (BUBBLE_BARS - 1) * (wave.length - 1);
+                var a = Math.floor(p);
+                var b = Math.min(wave.length - 1, a + 1);
+                var t = p - a;
+                var v = (Number(wave[a]) || 0) * (1 - t) + (Number(wave[b]) || 0) * t;
+                out.push(Math.max(10, Math.min(100, Math.round(v))));
+            }
+        } else {
+            // 老消息没有波形数据：按时长生成一条稳定的形状，不用 Math.random
+            for (i = 0; i < BUBBLE_BARS; i++) {
+                out.push(Math.round(26 + 34 * Math.abs(Math.sin(i * 0.85 + seed))));
+            }
+        }
+        return out;
+    }
+
+    function bubbleHTML(msg) {
+        var id = String(msg.id);
+        SRC[id] = msg.voice;
+        var dur = Math.max(1, Math.round(Number(msg.voiceDur) || 1));
+        var bars = barsFromWave(msg.voiceWave, dur);
+        var width = Math.round(104 + Math.min(1, dur / 20) * 116);
+        var html = '<div class="voice-bubble" data-voice="' + id + '" style="--vw:' + width + 'px" onclick="window.Voice.togglePlay(this)">'
+            + '<i class="fas fa-play voice-ico"></i>'
+            + '<div class="voice-bars">'
+            + bars.map(function (h) { return '<span style="height:' + h + '%"></span>'; }).join('')
+            + '</div>'
+            + '<span class="voice-dur">' + dur + '"</span>'
+            + '</div>';
+        if (msg.voiceText) {
+            html += '<div class="voice-text-line" onclick="event.stopPropagation();this.classList.toggle(\'expanded\')">'
+                + msg.voiceText + '</div>';
+        }
+        return html;
+    }
+
+    function srcOf(id) {
+        if (SRC[id]) return SRC[id];
+        try {
+            var list = (typeof messages !== 'undefined' && messages) || [];
+            for (var i = list.length - 1; i >= 0; i--) {
+                if (String(list[i].id) === String(id)) {
+                    var m = window.MediaStore ? MediaStore.hydrateOne(list[i]) : list[i];
+                    if (m && m.voice) { SRC[id] = m.voice; return m.voice; }
+                    return '';
+                }
+            }
+        } catch (e) { }
+        return '';
+    }
+
+    function stopPlayback() {
+        var a = st.playAudio;
+        st.playAudio = null;
+        if (a) {
+            try { a.pause(); a.currentTime = 0; } catch (e) { }
+        }
+        if (st.playEl) {
+            st.playEl.classList.remove('playing');
+            var ico = st.playEl.querySelector('.voice-ico');
+            if (ico) ico.className = 'fas fa-play voice-ico';
+            var bars = st.playEl.querySelectorAll('.voice-bars span');
+            for (var i = 0; i < bars.length; i++) bars[i].classList.remove('on');
+            st.playEl = null;
+        }
+    }
+
+    function togglePlay(el) {
+        if (!el) return;
+        var same = st.playEl === el;
+        if (same && st.playAudio && !st.playAudio.paused) {
+            stopPlayback();
+            return;
+        }
+        stopPlayback();
+
+        var id = el.getAttribute('data-voice');
+        var src = srcOf(id);
+        if (!src) {
+            toast('这段语音找不到了（可能已被清理）', 'info', 2600);
+            return;
+        }
+
+        // 音效那边（playSound）会在响的时候反过来停掉语音，这里不用再处理
+        var a = new Audio(src);
+        var bars = el.querySelectorAll('.voice-bars span');
+        var durAttr = Number(el.querySelector('.voice-dur') ? el.querySelector('.voice-dur').textContent.replace(/[^\d]/g, '') : 0) || 0;
+        var ico = el.querySelector('.voice-ico');
+
+        st.playAudio = a;
+        st.playEl = el;
+        el.classList.add('playing');
+        if (ico) ico.className = 'fas fa-pause voice-ico';
+
+        a.ontimeupdate = function () {
+            var total = a.duration && isFinite(a.duration) ? a.duration : durAttr;
+            if (!total) return;
+            var n = Math.round((a.currentTime / total) * bars.length);
+            for (var i = 0; i < bars.length; i++) bars[i].classList.toggle('on', i < n);
+        };
+        a.onended = function () {
+            if (st.playAudio === a) stopPlayback();
+        };
+        a.onerror = function () {
+            stopPlayback();
+            toast('这段语音播放不了（格式不被支持）', 'error', 3000);
+        };
+        a.play().catch(function () {
+            stopPlayback();
+        });
+    }
+
+    /* ───────────────────────── 初始化 ───────────────────────── */
+
+    function init() {
+        els.panel = $('voice-panel');
+        els.btn = $('voice-btn');
+        els.batchBtn = $('batch-btn');
+        els.dot = $('voice-dot');
+        els.timer = $('voice-timer');
+        els.wave = $('voice-wave');
+        els.state = $('voice-state');
+        els.cancel = $('voice-cancel');
+        els.redo = $('voice-redo');
+        els.stop = $('voice-stop');
+        els.send = $('voice-send');
+        els.sendText = $('voice-send-text');
+        els.preview = $('voice-preview-btn');
+        els.textWrap = $('voice-text-wrap');
+        els.text = $('voice-text');
+
+        if (!els.btn) return;
+
+        els.btn.setAttribute('aria-label', '语音消息');
+
+        // 两种都支持：
+        //   · 点一下开始，再点一下停（桌面/不熟悉的人）
+        //   · 按住说话，松手结束（手机上的肌肉记忆）
+        // 判据是「这次按下有没有真的开始录音」+「按了多久」：
+        //   短按 → 继续录，等下一次点击；长按 ≥0.9s → 松手就停。
+        var press = { at: 0, started: false };
+
+        function toggle() {
+            if (st.mode === 'idle') start();
+            else if (st.mode === 'recording') stop();
+        }
+
+        els.btn.addEventListener('pointerdown', function (e) {
+            if (e.button !== undefined && e.button !== 0) return;
+            press.at = Date.now();
+            press.started = false;
+            if (st.mode === 'idle') {
+                press.started = true;
+                start();
+            } else if (st.mode === 'recording') {
+                stop();
+            }
+        });
+
+        els.btn.addEventListener('pointerup', function () {
+            var held = press.at ? Date.now() - press.at : 0;
+            var started = press.started;
+            press.at = 0;
+            press.started = false;
+            if (started && held >= 900) {
+                if (st.mode === 'recording') stop();
+                else st.pendingStop = true;   // 还在等 getUserMedia，等它起来就停
+            }
+        });
+
+        els.btn.addEventListener('pointercancel', function () {
+            press.at = 0;
+            press.started = false;
+        });
+
+        // 键盘（Enter / Space）触发时 detail 为 0，走这里
+        els.btn.addEventListener('click', function (e) {
+            if (e.detail === 0) toggle();
+        });
+        if (els.stop) els.stop.addEventListener('click', stop);
+        if (els.cancel) els.cancel.addEventListener('click', cancel);
+        if (els.redo) els.redo.addEventListener('click', function () {
+            cleanup(true);
+            setTimeout(start, 60);
+        });
+        if (els.send) els.send.addEventListener('click', send);
+        if (els.sendText) els.sendText.addEventListener('click', sendTextOnly);
+        if (els.preview) els.preview.addEventListener('click', togglePreview);
+        if (els.text) {
+            els.text.addEventListener('input', syncSendTextBtn);
+            els.text.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    send();
+                }
+            });
+        }
+
+        renderLiveBars(null);
+        if (!supported()) {
+            els.btn.title = '当前环境不支持录音';
+            els.btn.style.opacity = '0.55';
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+    window.Voice = {
+        version: '1.0.0-p40',
+        supports: supported,
+        asrSupported: function () { return !!SR && !st.asrDead; },
+        start: start,
+        stop: stop,
+        cancel: cancel,
+        send: send,
+        bubbleHTML: bubbleHTML,
+        togglePlay: togglePlay,
+        pausePlayback: stopPlayback,
+        isRecording: function () { return st.mode === 'recording'; }
+    };
+})();
+
+</script>
     <script data-src="js/ext/mochi/ext-shell.js">
 /* ===== js/ext/mochi/ext-shell.js ===== */
 /**
@@ -38676,6 +39804,25 @@ window.exitCollapseMode = function() {
         return { ok: true, reply: rec.rep };
     }
 
+    /**
+     * P38：答错了 / 被误记成答过 —— 撤回到「待答」状态，卡片重新展开。
+     * 只动这条记录本身，不动聊天消息（错记时聊天里那条消息本来就是用户自己发的）。
+     */
+    function reopen(askId) {
+        var rec = _items[askId];
+        if (!rec) return { error: 'gone' };
+        if (!rec.ans && !rec.accepted && !rec.optIndex && !rec.answeredAt) return { error: 'noop' };
+        rec.ans = null;
+        delete rec.accepted;
+        delete rec.optIndex;
+        delete rec.answeredAt;
+        delete rec.fromChat;
+        delete rec.rep;
+        save();
+        _emit();
+        return { ok: true };
+    }
+
     /* ---------------- 我出题，TA 答（问问 TA） ---------------- */
 
     var _uid = 0;
@@ -38912,6 +40059,12 @@ window.exitCollapseMode = function() {
         var t = String(msg.text == null ? '' : msg.text).trim();
         if (!t) return false;
         if (_byMsg[String(msg.id)]) return false;      // 这条本身是我出的题
+        /* P38：引用回复不是答题。
+           以前只认「紧跟在提问后面的那条用户消息」，于是引用任意一条消息（包括这道题本身）
+           再发出去，都会被当成对这道题的作答 —— 卡上直接写「我的回答 <那句引用回复>」，
+           而卡片 DOM 又不会重画，看起来就变成「点了没反应」。
+           问答的入口是卡片上那个按钮，不是引用；所以带 replyTo 的一律不认。 */
+        if (msg.replyTo) return false;
         if (maxGap) {
             var at = msg.timestamp ? new Date(msg.timestamp).getTime() : 0;
             if (at && rec.ts && at - rec.ts > maxGap) return false;
@@ -39032,9 +40185,10 @@ window.exitCollapseMode = function() {
     }
 
     window.MochiAsk = {
-        version: '1.1.0-p9',
+        version: '1.2.0-p38',
         trigger: trigger,
         answer: answer,
+        reopen: reopen,
         askUser: askUser,
         askBatch: askBatch,
         /* 我主动：贴贴 / 邀请 TA（方向和 trigger 相反） */
@@ -49884,8 +51038,25 @@ window.exitCollapseMode = function() {
         });
     }
 
+    /**
+     * P38：把聊天里所有答题卡按当前记录重画一遍。
+     * 记录可能是被旁路改的（主输入框直接回、历史认领、记录页里操作），
+     * 卡片不跟着变就会出现「卡上写着点击回答，点了却没反应」。
+     */
+    function repaintBoxes() {
+        var boxes = document.querySelectorAll('.mx-ask-box');
+        for (var i = 0; i < boxes.length; i++) {
+            var b = boxes[i];
+            var r = window.MochiAsk && window.MochiAsk.byId ? window.MochiAsk.byId(b.dataset.ask) : null;
+            if (!r) { b.remove(); continue; }
+            var showing = !!b.querySelector('.mx-ask-done');
+            if (!!r.ans !== showing) renderBox(b, r);
+        }
+    }
+
     window.addEventListener('mochi-ask:change', function () {
-        setTimeout(refreshMineTags, 60);
+        setTimeout(function () { try { refreshMineTags(); } catch (e) { } }, 60);
+        setTimeout(function () { try { repaintBoxes(); } catch (e) { } }, 60);
     });
 
     /* ---------------- 我主动：贴贴 / 邀请 TA ---------------- */
@@ -49964,7 +51135,8 @@ window.exitCollapseMode = function() {
     function doneNode(rec) {
         var d = document.createElement('div');
         d.className = 'mx-ask-done';
-        d.innerHTML = '<span class="lb">我的回答</span>' + esc(rec.ans);
+        d.innerHTML = '<span class="lb">我的回答</span>' + esc(rec.ans)
+            + '<button type="button" class="mx-ask-again" data-act="again">答错了，重写</button>';
         return d;
     }
 
@@ -50119,9 +51291,30 @@ window.exitCollapseMode = function() {
         var box = findBox(ev.target);
         if (!box) return;
         var rec = window.MochiAsk.byId(box.dataset.ask);
-        if (!rec || rec.ans) return;
+        if (!rec) { box.remove(); return; }          // 记录没了（清空/换会话）→ 卡片一起收掉
 
         var t = ev.target;
+
+        /* 已答的卡片：还能点「答错了，重写」 */
+        if (rec.ans) {
+            var again = t.closest ? t.closest('[data-act="again"]') : null;
+            if (again) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                var rr = window.MochiAsk.reopen(rec.id);
+                if (rr && rr.ok) {
+                    setOpen(rec.id, true);
+                    renderBox(box, rec);
+                    var inp0 = box.querySelector('.mx-ask-inline input');
+                    if (inp0) setTimeout(function () { try { inp0.focus(); } catch (e) { } }, 80);
+                }
+                return;
+            }
+            /* P38 自愈：记录已经是「答过」，卡上却还写着「点击回答 TA 的提问」，
+               说明状态是旁路改的（历史认领 / 记账），此时任何点击都点不动 —— 直接重画成结果态。 */
+            if (!box.querySelector('.mx-ask-done')) renderBox(box, rec);
+            return;
+        }
 
         /* 收起态的问题卡：点一下才展开回复框 */
         var ex = t.closest ? t.closest('[data-act="expand"]') : null;
