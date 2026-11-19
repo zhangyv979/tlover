@@ -6,7 +6,7 @@
  *   - 其它静态资源：stale-while-revalidate，先用缓存，同时悄悄更新。
  * 换了版本 → CACHE 名变 → activate 时删掉旧缓存并 skipWaiting，用户下次打开就是新版。
  */
-var CACHE = 'chuanxun-c60c5036';
+var CACHE = 'chuanxun-f9b0754e';
 var CORE = [
     './index.html',
     './manifest.webmanifest',

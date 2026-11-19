@@ -1444,28 +1444,61 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             background-color: var(--send-btn-bg, var(--accent-color-dark));
         }
 
-        /* ===== P40 语音消息：录音按钮 / 录音面板 ===== */
-        /* 320 这种极窄屏：输入区本来就靠逐级收紧才放得下，
-           再塞一个键会把发送键压到 32px。这里直接藏掉，
-           语音入口退到「收起更多」面板里（见 index.html 的 collapsed-extras-panel）。 */
-        @media (max-width: 359px) {
-            .voice-btn { display: none !important; }
+        /* ===== P41 语音消息：麦克风收进输入框 =====
+           原来它是输入区右侧第 7 个独立圆钮。390 屏本来 78px 宽的输入框
+           被挤到 58px（约 3 个汉字），视觉上也太挤。
+           改成绝对定位在 textarea 内部的右端：不占一行里的宽度，
+           省下来的 32px + 10px 间距全还给输入框（58 → 78px）。
+           有文字时图标淡出，免得压住刚打的字 —— 发语音的时候输入框
+           通常是空的（消息发出后自动清空），这个约束几乎碰不到。 */
+        .input-shell {
+            flex: 1;
+            min-width: 0;
+            position: relative;
+            display: flex;
+            align-items: flex-end;
         }
-        /* 手机上语音键比其它键小一圈：它是个次要入口，不该跟发送键抢宽度。
-           加它之前输入框在 390 屏是 78px，加完被挤到 58px —— 3 个字的水平，
-           少 8px 就能拉回到 66px，再往上只能靠减少按钮，不值得。 */
-        @media (max-width: 480px) {
-            .voice-btn {
-                width: 32px !important;
-                min-width: 32px !important;
-                height: 32px !important;
-                font-size: 13px !important;
-                align-self: center;
-            }
+        .input-shell > .message-input {
+            width: 100%;
+            /* 空态给右侧图标让出位置 */
+            padding-right: 32px;
         }
-        .voice-btn.recording {
-            background-color: #ff4d4f !important;
-            color: #fff !important;
+        .input-shell.has-text > .message-input {
+            /* 有字时图标不挪位、不消失，只是变淡 —— 打了半截想改口说，
+               这时候点麦克风是很正常的需求，不能把入口藏掉。
+               32px 的让位一直留着，文字永远压不到图标上。 */
+            padding-right: 32px;
+        }
+        .voice-inline-btn {
+            position: absolute;
+            z-index: 2;
+            right: 5px;
+            bottom: 8px;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.18s, color 0.18s, background-color 0.18s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .voice-inline-btn:hover { opacity: 0.9; }
+        .voice-inline-btn:active { background-color: rgba(var(--accent-color-rgb), 0.14); }
+        .input-shell.has-text > .voice-inline-btn {
+            opacity: 0.35;
+        }
+        .voice-inline-btn.recording {
+            color: #ff4d4f;
+            opacity: 1;
+            background-color: rgba(255, 77, 79, 0.12);
             animation: voiceBtnPulse 1.5s ease-in-out infinite;
         }
         @keyframes voiceBtnPulse {
@@ -1684,11 +1717,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             overflow: visible;
         }
 
-        .coin-btn, .batch-btn, .continue-btn, .attachment-btn, .poke-btn, .combo-btn, .voice-btn {
+        .coin-btn, .batch-btn, .continue-btn, .attachment-btn, .poke-btn, .combo-btn {
             background-color: var(--toolbar-btn-bg, var(--message-received-bg));
             color: var(--toolbar-btn-color, var(--text-secondary));
         }
-        .attachment-btn:hover, .continue-btn:hover, .batch-btn:hover, .coin-btn:hover, .poke-btn:hover, .combo-btn:hover, .voice-btn:hover {
+        .attachment-btn:hover, .continue-btn:hover, .batch-btn:hover, .coin-btn:hover, .poke-btn:hover, .combo-btn:hover {
             color: var(--text-primary);
         }
 
@@ -2114,8 +2147,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
                去掉模糊后把底色从 0.6 加深到 0.72，层级感基本不变。 */
             background-color: rgba(0, 0, 0, 0.72);
             z-index: 2000;
-            align-items: center;
+            /* safe center：能放下就居中，放不下（键盘把视口压矮、卡片又被锁成像素高）
+               就退化成顶端对齐，而不是上下各溢出一半 —— 那样顶部的信封三角会被
+               顶到屏幕外。overflow-y 兜住超出部分，用户还能滚。 */
+            align-items: safe center;
             justify-content: center;
+            overflow-y: auto;
+            padding: 16px 0;
+            box-sizing: border-box;
+            /* 只给蒙层做淡入。蒙层是一整块纯色，纹理就是一张单色图，
+               第一帧即便没光栅化完也只是"更透明的黑"，不会透出白块。 */
+            animation: modalBgFadeIn 0.16s ease;
         }
         @keyframes modalBgFadeIn {
             from {
@@ -2142,8 +2184,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             border: 1px solid var(--surface-border);
             /* 55px 的模糊半径在 92vh 高的卡片上等于一整屏的离屏栅格，
                打开那一帧来不及时就露出空白。收到 26px，观感差别很小。 */
-            box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.10);
-            animation: modalContentSlideIn 0.26s cubic-bezier(0.22, 0.9, 0.3, 1);
+            /* 26px 的模糊半径要为一整块 92vh 的卡片做离屏栅格，
+               首帧来不及时阴影边缘会缺一块。收到 18px，肉眼几乎看不出差别。 */
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.20), 0 1px 4px rgba(0, 0, 0, 0.08);
+            /* 这里**不再**放入场动画（P41）。
+               卡片是从 display:none 现建的，只要挂上 animation，Chromium / WebView
+               就会先给它分配一张空的合成层纹理，再异步光栅化 ——
+               第一帧画出来是"卡片位置一片空白"，第二帧才填上内容，
+               观感就是打开瞬间闪一下。位移和淡入都改由"不建层"来保证稳定：
+               卡片直接以最终状态出现，蒙层负责过渡。 */
             transition: background-color 0.5s ease;
             scrollbar-width: none;
             -ms-overflow-style: none;
@@ -2754,13 +2803,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         .message:hover {
             box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
         }
-        .modal-content {
-            animation: modalSlideUp 0.26s cubic-bezier(0.22, 0.9, 0.3, 1) !important;
-        }
-        /* 只动 transform，不动 opacity、不做 scale：
-           opacity 从 0 起会让卡片在头一帧"还没亮"，scale 会让靠近全屏的卡片
-           逐帧重算一次栅格（信封那种 92vh 高的卡片最贵）。两者都是 WebView 里
-           "打开闪一下"的常见来源。卡片是否可见由 showModal 在显示前一次性写好。 */
+        /* P41：这里原本有一条 `.modal-content { animation: modalSlideUp ... !important }`，
+           把上面刚删掉的入场动画又加了回来（还带 !important，等于白删）。
+           一并移除，并保留 modalSlideUp 的定义给别处可能的内联用法。 */
         @keyframes modalSlideUp {
             from { transform: translateY(14px); }
             to { transform: none; }
@@ -2857,9 +2902,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             overflow: hidden;
             display: flex; flex-direction: column;
             /* 信封盖是 clip-path 裁出来的三角形：卡片高度每变一次就要重新裁剪一次，
-               再叠上内部 flex 重排，就是那阵"整块在抖"。键盘弹起没法避免，
-               但入场阶段已经通过推迟 focus 错开（见 core.js showModal）。 */
-            max-height: 88vh;
+               再叠上内部 flex 重排，就是那阵"整块在抖"。
+               这里原本还有一条 max-height: 88vh —— 它才是键盘弹起时变形的真正源头：
+               showModal 已经把 .modal-content 的高度冻结成像素值，可这一层还在读 vh，
+               视口一变 88vh 就跟着缩，卡片照样从 683 塌到 442。
+               去掉之后高度全部由 .modal-content 决定，滚动交给 .env-body。
+               必须配 min-height: 0，否则 flex 子项不肯收缩，overflow 也不生效。 */
+            min-height: 0;
         }
         .env-header-flap {
             position: relative;
@@ -11763,10 +11812,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         <i class="fas fa-laugh-beam"></i>
     </button>
 
-    <textarea class="message-input" id="message-input" placeholder="" rows="1"></textarea>
+    <div class="input-shell" id="input-shell">
+        <textarea class="message-input" id="message-input" placeholder="" rows="1"></textarea>
+        <button class="voice-inline-btn" id="voice-btn" title="发送语音" aria-label="语音消息"><i class="fas fa-microphone"></i></button>
+    </div>
     
     <div class="input-buttons">
-    <button class="voice-btn input-btn collapse-hideable" id="voice-btn" title="发送语音"><i class="fas fa-microphone"></i></button>
     <button class="continue-btn input-btn" id="continue-btn" title="让对方继续说"><i class="fas fa-ellipsis-h"></i></button>
         <button class="batch-btn input-btn collapse-hideable" id="batch-btn" title="批量发送模式"><i class="fas fa-layer-group"></i></button>
         <button class="send-btn input-btn" id="send-btn" title="发送消息"><i class="fas fa-paper-plane"></i></button>
@@ -19431,8 +19482,24 @@ function showModal(modalElement, focusElement = null) {
                 if (content.style.transform) content.style.transform = '';
             }
             modalElement.style.display = 'flex';
-            /* 等入场动画（260ms）跑完再聚焦。原来 100ms 就 focus，键盘正好在
-               卡片动画中途弹起，两套重排叠在一起 —— 那一下最花。 */
+            /* P41：把卡片高度当场冻结成像素值。
+               .modal-content 的高度来自 max-height: 80vh（信封 92vh），而安卓
+               WebView 的 adjustResize 会在键盘弹起时逐帧改 layout viewport 高度，
+               vh 就跟着一起缩 —— 卡片每帧变矮一点，内部 flex 逐帧重排，
+               信封那道 clip-path 三角还得每帧重裁。打字页面的"闪"主要来自这里。
+               锁成 px 之后键盘再怎么弹，卡片只是一个整体被推上去，不再逐帧变形。
+               键盘已经开着时不锁：那时的 80vh 是按缩小后的视口算的，锁下来会偏矮。 */
+            if (content) {
+                content.style.maxHeight = '';
+                const vv = window.visualViewport;
+                const kbOpen = !!(vv && (window.innerHeight - vv.height) > 120);
+                if (!kbOpen) {
+                    const h = Math.round(content.getBoundingClientRect().height);
+                    if (h > 0) content.style.maxHeight = h + 'px';
+                }
+            }
+            /* 等卡片落位再聚焦。原来 100ms 就 focus，键盘正好在卡片刚出现时弹起，
+               两套重排叠在一起 —— 那一下最花。 */
             if (focusElement) {
                 setTimeout(() => focusElement.focus(), 300);
             }
@@ -19445,6 +19512,8 @@ function showModal(modalElement, focusElement = null) {
             if (content) {
                 if (content.style.opacity) content.style.opacity = '';
                 if (content.style.transform) content.style.transform = '';
+                // 解掉 showModal 冻结的高度，下次打开按当时的视口重量
+                if (content.style.maxHeight) content.style.maxHeight = '';
             }
             if (modalElement._hideTimeout) clearTimeout(modalElement._hideTimeout);
             modalElement._hideTimeout = setTimeout(() => {
@@ -35667,6 +35736,8 @@ window.exitCollapseMode = function() {
  *   5. 语音转文字优先用浏览器自带的 SpeechRecognition。
  *      WebView 里这个 API 基本不可用（没有语音服务），所以「转不了」是常态，
  *      此时退回「手打一句」，绝不阻塞发送语音。
+ *   6. 码率必须自己压。浏览器默认给到 ~120kbps，一分钟音频将近 900KB，
+ *      而这是「对着麦克风说人话」，不是听歌。见 BPS 那一段的注释。
  */
 (function () {
     'use strict';
@@ -35675,6 +35746,23 @@ window.exitCollapseMode = function() {
     var MIN_SEC = 0.7;      // 短于这个当作误触
     var LIVE_BARS = 26;     // 面板上的实时波形柱数
     var BUBBLE_BARS = 24;   // 气泡里的波形柱数
+
+    /* P42：码率与分片长度。
+     *
+     * 不给 audioBitsPerSecond 时，Chromium 用 ~120kbps，
+     * 实测 6 秒 87KB、60 秒 892KB；同一条语音存进 IndexedDB 还要再被
+     * base64 放大 4/3，换成 UTF-16 存储再翻一倍。
+     *
+     * Opus 对「人声 + 手机外放」这个场景，24kbps 单声道已经完全够用
+     * （实测 60 秒 166KB，降 81%，听感上只有极高频的气声变钝）。
+     * 再往下到 16kbps 只有 119KB，但 16k 会开始糊齿音，
+     * 语音消息里「明天」「明天见」容易听不真，不值这点空间。
+     *
+     * 分片 200ms → 1000ms：WebM 每个分片是一个 cluster，
+     * 6 秒录音 26 个分片比 6 个多花约 4% 的容器开销。
+     */
+    var BPS = 24000;
+    var CHUNK_MS = 1000;
 
     var SRC = {};           // 消息 id -> 音频 data URL（渲染时登记，避免塞进 DOM 属性）
 
@@ -35717,6 +35805,15 @@ window.exitCollapseMode = function() {
         return m + ':' + (s < 10 ? '0' + s : s);
     }
 
+    /* P42：录完把体积说出来。用户就是看着设置页那个数字在问「怎么这么大」，
+       给他一个当场可见的数，比事后去设置里翻强。
+       语音基本都在几百 KB 这个量级，MB 分支只是兜底。 */
+    function fmtBytes(n) {
+        n = Number(n) || 0;
+        if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+        return Math.max(1, Math.round(n / 1024)) + ' KB';
+    }
+
     function toast(msg, kind, ms) {
         if (typeof showNotification === 'function') showNotification(msg, kind || 'info', ms || 2600);
     }
@@ -35740,6 +35837,23 @@ window.exitCollapseMode = function() {
 
     function supported() {
         return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof MediaRecorder !== 'undefined');
+    }
+
+    /* P42：按「最省 → 最兼容」逐级降。
+       个别 WebView 对带额外字段的 options 直接抛 TypeError（连 mimeType 一起拒），
+       所以最后一档是「什么都不带」。任何一档成功就返回，不折腾用户。 */
+    function makeRecorder(stream, mime) {
+        var tries = [];
+        if (mime) tries.push({ mimeType: mime, audioBitsPerSecond: BPS });
+        tries.push({ audioBitsPerSecond: BPS });
+        if (mime) tries.push({ mimeType: mime });
+        tries.push(null);
+        for (var i = 0; i < tries.length; i++) {
+            try {
+                return tries[i] ? new MediaRecorder(stream, tries[i]) : new MediaRecorder(stream);
+            } catch (e) { }
+        }
+        return null;
     }
 
     /* ───────────────────────── 面板 ───────────────────────── */
@@ -35842,36 +35956,56 @@ window.exitCollapseMode = function() {
         st.asrTried = false;
         st.asrRestart = 0;
 
-        navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-        }).then(onStream).catch(function (err) {
-            st.mode = 'idle';
-            closePanel();
-            var name = err && err.name ? err.name : '';
-            if (name === 'NotAllowedError' || name === 'SecurityError') {
-                toast('麦克风权限被拒绝，请在浏览器/App 设置里允许录音', 'error', 4200);
-            } else if (name === 'NotFoundError') {
-                toast('没找到麦克风设备', 'error', 3600);
-            } else {
-                toast('打不开麦克风：' + (err && err.message ? err.message : '未知错误'), 'error', 4200);
-            }
-        });
+        /* P41：直接要裸的 { audio: true }。
+           原来带了 echoCancellation / noiseSuppression / autoGainControl 三个约束，
+           安卓壳里的 WebView 对带约束的请求更容易抛
+           NotReadableError: Could not start audio source —— 系统权限明明给了，
+           音频通道却起不来。这三个约束对着手机说话这件事本来也没什么用
+           （回声消除是为了免提通话的两端互听），去掉最稳。
+           再失败的话，多半是这个壳没把录音通道交给网页层，不是网站能修的。 */
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(onStream)
+            .catch(function (err) {
+                var name = err && err.name ? err.name : '';
+                // 极少数 WebView 反过来只认带约束的请求，补一次
+                if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
+                    return navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+                    }).then(onStream).catch(fail);
+                }
+                fail(err);
+            });
+    }
+
+    function fail(err) {
+        st.mode = 'idle';
+        closePanel();
+        var name = err && err.name ? err.name : '';
+        var msg = err && err.message ? err.message : '';
+        if (name === 'NotAllowedError' || name === 'SecurityError') {
+            toast('麦克风权限被拒绝，请在 App 设置里允许录音', 'error', 4200);
+        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+            toast('没找到麦克风设备', 'error', 3600);
+        } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+            /* 这是安卓壳最常见的一种：系统权限给了、页面也是 https，
+               但 WebView 拿不到录音通道（壳没实现 onPermissionRequest，
+               或者麦克风正被别的 App 占着）。网站侧无能为力，说清楚比反复报错好。 */
+            toast('App 的网页层拿不到麦克风，先用文字说吧（浏览器里可以录）', 'error', 5000);
+        } else {
+            toast('打不开麦克风：' + (msg || '未知错误'), 'error', 4200);
+        }
     }
 
     function onStream(stream) {
         st.stream = stream;
         var mime = pickMime();
-        var rec;
-        try {
-            rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-        } catch (e) {
-            try { rec = new MediaRecorder(stream); } catch (e2) {
-                releaseStream();
-                st.mode = 'idle';
-                closePanel();
-                toast('这个浏览器不支持录音编码', 'error', 3600);
-                return;
-            }
+        var rec = makeRecorder(stream, mime);
+        if (!rec) {
+            releaseStream();
+            st.mode = 'idle';
+            closePanel();
+            toast('这个浏览器不支持录音编码', 'error', 3600);
+            return;
         }
 
         st.rec = rec;
@@ -35887,7 +36021,7 @@ window.exitCollapseMode = function() {
             console.warn('[voice] recorder error', ev);
         };
 
-        try { rec.start(200); } catch (e) { }
+        try { rec.start(CHUNK_MS); } catch (e) { }
 
         // 音量分析：实时波形 + 结尾保存一条静态波形
         try {
@@ -35990,7 +36124,14 @@ window.exitCollapseMode = function() {
         st.mode = 'reviewing';
         setPhase('reviewing');
         if (els.timer) els.timer.textContent = fmt(Math.max(1, Math.round(st.dur)));
-        setStateText('已录好，可以试听');
+        /* P42：把体积写在脸上。用户就是盯着设置页那个数字在问「怎么这么大」，
+           给个当场可见的数更直接。顺带留一条诊断：个别壳会把 options 整个丢掉，
+           这时一分钟还会是 800KB+，码率明显不对，记一条日志方便排查。 */
+        var realBps = st.dur > 0 ? blob.size * 8 / st.dur : 0;
+        if (realBps > 64000) {
+            console.warn('[voice] 码率设置没生效，实际约 ' + Math.round(realBps / 1000) + 'kbps');
+        }
+        setStateText('已录好 · ' + fmtBytes(blob.size) + '，可以试听');
         renderLiveBars(st.samples.slice(-LIVE_BARS));
         if (els.text) {
             els.text.value = (st.asrFinal + st.asrInterim).trim();
@@ -36362,6 +36503,32 @@ window.exitCollapseMode = function() {
 
         els.btn.setAttribute('aria-label', '语音消息');
 
+        /* 麦克风图标住在输入框内部右侧（P41）。输入框一有字就把图标淡出，
+           免得压住刚打的字 —— 发语音的时候输入框基本都是空的。
+           代码里清空输入框（发送后、切会话、清草稿）不会触发 input 事件，
+           所以顺手在实例上包一层 value 的 setter，谁赋值都能同步。 */
+        var inputEl = document.getElementById('message-input');
+        var shellEl = document.getElementById('input-shell');
+        if (inputEl && shellEl) {
+            var syncShell = function () {
+                shellEl.classList.toggle('has-text', !!String(inputEl.value || '').trim());
+            };
+            inputEl.addEventListener('input', syncShell);
+            inputEl.addEventListener('change', syncShell);
+            try {
+                var d = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+                if (d && d.set) {
+                    Object.defineProperty(inputEl, 'value', {
+                        configurable: true,
+                        get: function () { return d.get.call(this); },
+                        set: function (v) { d.set.call(this, v); syncShell(); }
+                    });
+                }
+            } catch (e) { }
+            window.__syncVoiceShell = syncShell;
+            syncShell();
+        }
+
         // 两种都支持：
         //   · 点一下开始，再点一下停（桌面/不熟悉的人）
         //   · 按住说话，松手结束（手机上的肌肉记忆）
@@ -36439,7 +36606,7 @@ window.exitCollapseMode = function() {
     }
 
     window.Voice = {
-        version: '1.0.0-p40',
+        version: '1.2.0-p42',
         supports: supported,
         asrSupported: function () { return !!SR && !st.asrDead; },
         start: start,
@@ -44434,6 +44601,11 @@ window.exitCollapseMode = function() {
     var CTRL_EVERY = 20;     // 每 20 秒给 TA 一次「伸手」的机会
     var DM_EVERY = 15;       // 每 15 秒掷一次弹幕骰子
 
+    /* 嵌外部网页时的沙箱：能跑脚本、能用自己的 cookie，但「自动」跳顶层
+       （bilibili:// 这类）会被拦下来；你手点链接照样能跳。 */
+    var SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation '
+        + 'allow-top-navigation-by-user-activation';
+
     var _state = { v: 2, cur: null, history: [], settings: DEF_SET };
     var _loadedFor = null;
     var _pane = null;
@@ -44447,6 +44619,12 @@ window.exitCollapseMode = function() {
     var _pickedFilm = null;
     var _showHist = false;
     var _replyTimer = null;
+
+    /* P43：全屏。只切 .mx-mv-screen 的 class，绝不重建 DOM ——
+       一旦重绘，iframe 就会重新加载，看到一半的视频会回到片头。 */
+    var _fs = false;
+    var _fsPushed = false;        // 全屏时压进 history 的那一条
+    var _fsSilentBack = false;    // 我们自己 back 掉的，别让它把整页关了
 
     /* ---------------- 基础设施 ---------------- */
 
@@ -44472,7 +44650,7 @@ window.exitCollapseMode = function() {
 
     function rnd(n) { return Math.floor(Math.random() * n); }
 
-    function toast(msg) {
+    function toast(msg, ms) {
         try {
             var el = document.createElement('div');
             el.className = 'mx-ask-toast';
@@ -44482,7 +44660,7 @@ window.exitCollapseMode = function() {
             setTimeout(function () {
                 el.classList.remove('show');
                 setTimeout(function () { try { el.remove(); } catch (e) { } }, 260);
-            }, 1800);
+            }, ms || 1800);
         } catch (e) { }
     }
 
@@ -44549,6 +44727,10 @@ window.exitCollapseMode = function() {
             tone: Array.isArray(c.tone) && c.tone.length === 3 ? c.tone : ['#2f2b3a', '#5c5570', '#cfc3cf'],
             link: typeof c.link === 'string' ? c.link : '',
             embed: typeof c.embed === 'string' ? c.embed : '',
+            /* P44：原本要看的那条电脑版网址，和用户在「播放器 / 电脑版」之间选的档 */
+            pcUrl: typeof c.pcUrl === 'string' ? c.pcUrl : '',
+            view: c.view === 'web' ? 'web' : (c.view === 'player' ? 'player' : ''),
+            tried: !!c.tried,
             startedAt: Number(c.startedAt) || Date.now(),
             elapsed: Number(c.elapsed) || 0,
             runSince: Number(c.runSince) || 0,
@@ -44574,20 +44756,105 @@ window.exitCollapseMode = function() {
 
     /* ---------------- 链接解析 ---------------- */
 
-    function toEmbed(url) {
+    /* P44：手机分享出来的链接九成是 m 站。m 站存在的意义就是拉 App，
+       同一个片子换成 PC 站域名先试一次，能省掉一大半「点了就被拉走」。 */
+    var PC_MAP = [
+        [/^https?:\/\/m\.iqiyi\.com/i, 'https://www.iqiyi.com'],
+        [/^https?:\/\/m\.youku\.com/i, 'https://v.youku.com'],
+        [/^https?:\/\/m\.v\.qq\.com/i, 'https://v.qq.com'],
+        [/^https?:\/\/m\.mgtv\.com/i, 'https://www.mgtv.com'],
+        [/^https?:\/\/m\.tv\.sohu\.com/i, 'https://tv.sohu.com'],
+        [/^https?:\/\/m\.bilibili\.com/i, 'https://www.bilibili.com']
+    ];
+
+    function pcDomain(url) {
         var u = String(url || '').trim();
-        if (!u) return '';
+        for (var i = 0; i < PC_MAP.length; i++) {
+            if (PC_MAP[i][0].test(u)) return u.replace(PC_MAP[i][0], PC_MAP[i][1]);
+        }
+        return u;
+    }
+
+    /* P44 实测（手机 UA 请求 PC 域名）：爱奇艺、芒果都 302 回 m 站，
+       优酷、腾讯、B 站是 200。iframe 改不了 UA，被 302 回 m 站之后照样拉 App，
+       所以这两家不硬嵌，先在屏幕上把话说清楚。 */
+    var APP_LOCKED = /^https?:\/\/(www\.iqiyi\.com|www\.mgtv\.com)\//i;
+
+    function appLocked(url) { return APP_LOCKED.test(String(url || '').trim()); }
+
+    /* P43：能转到「官方播放器 embed」的一律转。
+       直接把视频页塞进 iframe 是不行的 —— B 站 / 优酷的移动页
+       一加载就 deeplink 拉起 App，用户连画面都看不到，还以为是网站坏了。
+       embed 页是给站外嵌的，本身不会跳 App。 */
+    /* B 站的分 P 和起播时间都在 query 里，只取 BV 号会把「第 3 集」「从 1:30 开始」
+       全丢掉。player.html 认 page / t 两个参数。 */
+    function biliExtra(u) {
+        var q = '';
+        try {
+            var sp = new URL(u).searchParams;
+            var pg = parseInt(sp.get('p'), 10);
+            if (pg > 1) q += '&page=' + pg;
+            var t = parseInt(sp.get('t'), 10);
+            if (t > 0) q += '&t=' + t;
+        } catch (e) { }
+        return q;
+    }
+
+    function officialEmbed(u) {
+        u = String(u || '');
         var m;
         if ((m = u.match(/(?:bilibili\.com\/video\/|b23\.tv\/)(BV[0-9A-Za-z]+)/))) {
-            return 'https://player.bilibili.com/player.html?bvid=' + m[1] + '&autoplay=0&high_quality=1';
+            return 'https://player.bilibili.com/player.html?bvid=' + m[1] + biliExtra(u)
+                + '&autoplay=0&high_quality=1';
         }
-        if ((m = u.match(/youtube\.com\/watch\?v=([\w-]{6,})/)) || (m = u.match(/youtu\.be\/([\w-]{6,})/))) {
+        if ((m = u.match(/bilibili\.com\/video\/av(\d+)/i))) {
+            return 'https://player.bilibili.com/player.html?aid=' + m[1] + biliExtra(u)
+                + '&autoplay=0&high_quality=1';
+        }
+        if ((m = u.match(/youtube\.com\/watch\?v=([\w-]{6,})/))
+            || (m = u.match(/youtu\.be\/([\w-]{6,})/))
+            || (m = u.match(/youtube\.com\/shorts\/([\w-]{6,})/))) {
             return 'https://www.youtube.com/embed/' + m[1];
         }
         if ((m = u.match(/v\.qq\.com\/.*\/([A-Za-z0-9]{8,})\.html/))) {
             return 'https://v.qq.com/txp/iframe/player.html?vid=' + m[1];
         }
-        return /^https?:\/\//i.test(u) ? u : '';
+        if ((m = u.match(/youku\.com\/v_show\/id_([\w=]+)\.html/))) {
+            return 'https://player.youku.com/embed/' + m[1];
+        }
+        if ((m = u.match(/ixigua\.com\/(\d{15,})/))) {
+            return 'https://www.ixigua.com/iframe/' + m[1] + '?autoplay=0';
+        }
+        return '';
+    }
+
+    /* 对外仍然只给一个字符串：有官方播放器就用它，没有就退回电脑版网页。 */
+    function toEmbed(url) {
+        var u = pcDomain(url);
+        if (!u || !/^https?:\/\//i.test(u)) return '';
+        return officialEmbed(u) || u;
+    }
+
+    /* 一条链接拆成两份：官方播放器、电脑版网页。
+       两边都有的时候默认用播放器（它就是给人嵌的，最省事），
+       想看选集 / 评论再手动切到电脑版。 */
+    function resolveLink(url) {
+        var u = pcDomain(url);
+        if (!u || !/^https?:\/\//i.test(u)) return null;
+        var e = officialEmbed(u);
+        return { pc: u, embed: e, blocked: !e && appLocked(u) };
+    }
+
+    /* b23.tv 短链要请求一次才知道跳到哪，跨域读不到 Location。
+       它唯一能做的事就是「把 App 拉起来」—— 干脆不嵌，直接说清楚怎么办。 */
+    function isShortLink(url) {
+        return /^https?:\/\/b23\.tv\/[0-9A-Za-z]+/i.test(String(url || '').trim());
+    }
+
+    /* 这些是「官方 embed 播放器」，可以放心嵌，不需要额外拦跳转 */
+    function isPlayerEmbed(url) {
+        return /^https:\/\/(player\.bilibili\.com|www\.youtube\.com\/embed|v\.qq\.com\/txp\/iframe|player\.youku\.com\/embed|www\.ixigua\.com\/iframe)/i
+            .test(String(url || ''));
     }
 
     function hostOf(url) {
@@ -44607,6 +44874,8 @@ window.exitCollapseMode = function() {
         if (openMsg) chat.push({ who: 'me', text: String(openMsg), ts: Date.now() });
         chat.push({ who: 'ta', text: '那就看这部吧，我坐你旁边。', ts: Date.now() + 1 });
 
+        var rl = link ? resolveLink(link) : null;
+
         _state.cur = normCur({
             id: film.id,
             title: film.title,
@@ -44614,7 +44883,10 @@ window.exitCollapseMode = function() {
             min: film.min,
             tone: film.tone,
             link: link || '',
-            embed: link ? toEmbed(link) : '',
+            embed: rl ? rl.embed : '',
+            pcUrl: rl ? rl.pc : '',
+            view: '',
+            tried: false,
             startedAt: Date.now(),
             elapsed: 0,
             runSince: Date.now(),
@@ -44678,8 +44950,50 @@ window.exitCollapseMode = function() {
         emit();
     }
 
-    function endFilm(silent) {
-        var c = _state.cur;
+    /* ---------------- 全屏 ----------------
+       为什么不用 requestFullscreen：iframe 跨域，全屏请求会被拒；
+       而且 App 的 WebView 里全屏 API 经常直接不响应。
+       这里只是把 16:9 的播放区提升成「铺满视口的一层」，
+       页面结构不动，iframe 也就不会被重新加载。 */
+
+    function applyFs() {
+        var scr = document.getElementById('mx-mv-screen');
+        if (scr) scr.classList.toggle('fs', _fs);
+        var x = document.getElementById('mx-mv-fsx');
+        if (x) x.style.display = _fs ? '' : 'none';
+        var btn = _pane && _pane.querySelector ? _pane.querySelector('[data-mv="fs"]') : null;
+        if (btn) btn.textContent = _fs ? '还原' : '全屏';
+        // 全屏时别让外层页面跟着手指晃
+        document.documentElement.classList.toggle('mx-mv-fs-open', _fs);
+    }
+
+    function enterFs() {
+        if (_fs || !document.getElementById('mx-mv-screen')) return;
+        _fs = true;
+        applyFs();
+        // 压一条 history：Android 的返回键先退全屏，而不是直接退出整页
+        try { history.pushState({ mxMovieFs: 1 }, ''); _fsPushed = true; }
+        catch (e) { _fsPushed = false; }
+    }
+
+    /* consumed=true：这条 history 已经被返回键吃掉，不要再 back 一次 */
+    function leaveFs(consumed) {
+        if (!_fs) return;
+        _fs = false;
+        applyFs();
+        if (consumed) { _fsPushed = false; return; }
+        if (_fsPushed) {
+            _fsPushed = false;
+            _fsSilentBack = true;
+            try { history.back(); } catch (e) { _fsSilentBack = false; }
+            // 万一 back 没触发 popstate，别把下一次返回也吞掉
+            setTimeout(function () { _fsSilentBack = false; }, 400);
+        }
+    }
+
+    function toggleFs() { if (_fs) leaveFs(); else enterFs(); }
+
+    function endFilm(silent) {        var c = _state.cur;
         if (!c) return;
         var sec = Math.max(1, Math.round(elapsedNow()));
         _state.history.unshift({
@@ -44807,6 +45121,26 @@ window.exitCollapseMode = function() {
             + '.mx-mv-screen{position:relative;border-radius:14px;overflow:hidden;background:#14121a;'
             + 'aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;}'
             + '.mx-mv-screen iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}'
+            /* 普通网页：16:9 只够看个标题，撑高一点，内容才真的能上下滑 */
+            + '.mx-mv-screen.web{aspect-ratio:auto;height:62vh;max-height:520px;min-height:200px;}'
+            /* 爱奇艺 / 芒果：硬嵌必被拉走，先给一张说明卡，让用户自己选 */
+            + '.mx-mv-gate{position:relative;z-index:1;max-width:310px;padding:0 18px;text-align:center;color:#fff;'
+            + 'display:flex;flex-direction:column;align-items:center;gap:9px;}'
+            + '.mx-mv-gate b{font-size:13.5px;font-weight:600;line-height:1.5;}'
+            + '.mx-mv-gate span{font-size:11px;line-height:1.7;opacity:.72;}'
+            + '.mx-mv-gate-btns{display:flex;gap:8px;margin-top:2px;flex-wrap:wrap;justify-content:center;}'
+            + '.mx-mv-gate-btns button{border:0;border-radius:999px;padding:7px 14px;font-size:11.5px;'
+            + 'font-family:inherit;cursor:pointer;background:#fff;color:#2a2530;}'
+            + '.mx-mv-gate-btns button.ghost{background:transparent;border:1px solid rgba(255,255,255,.34);color:#fff;}'
+            /* 全屏：只改定位，不动 DOM，所以 iframe 不会重载、视频不会回片头 */
+            + '.mx-mv-screen.fs{position:fixed;top:0;right:0;bottom:0;left:0;height:auto;max-height:none;'
+            + 'min-height:0;aspect-ratio:auto;border-radius:0;z-index:10070;background:#000;}'
+            + '.mx-mv-fsx{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:10px;z-index:4;'
+            + 'width:36px;height:36px;border:0;border-radius:50%;background:rgba(0,0,0,.58);color:#fff;'
+            + 'display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;cursor:pointer;'
+            + 'box-shadow:0 1px 6px rgba(0,0,0,.35);'
+            + '-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}'
+            + 'html.mx-mv-fs-open,html.mx-mv-fs-open body{overflow:hidden;}'
             + '.mx-mv-scr-in{position:relative;z-index:1;text-align:center;color:#fff;padding:0 18px;}'
             + '.mx-mv-scr-in b{display:block;font-size:17px;font-weight:600;letter-spacing:2px;}'
             + '.mx-mv-scr-in span{display:block;font-size:10px;letter-spacing:1.4px;opacity:.6;margin-top:6px;}'
@@ -44815,11 +45149,11 @@ window.exitCollapseMode = function() {
             + '.mx-mv-bar i{position:absolute;left:0;top:0;bottom:0;width:0;min-width:6px;border-radius:2px;'
             + 'background:linear-gradient(90deg,var(--accent-color,#b483a6),#e4c8d8);transition:width .9s linear;'
             + 'box-shadow:0 0 6px color-mix(in srgb,var(--accent-color,#b483a6) 45%,transparent);}'
-            + '.mx-mv-ctrl{display:flex;align-items:center;gap:10px;font-size:10.5px;color:var(--text-secondary);}'
+            + '.mx-mv-ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:10.5px;color:var(--text-secondary);}'
             + '.mx-mv-ctrl b{font-weight:500;font-variant-numeric:tabular-nums;}'
             + '.mx-mv-ctrl .sp{flex:1;}'
             + '.mx-mv-ctrl button{border:1px solid var(--border-color);background:var(--primary-bg);'
-            + 'color:var(--text-primary);border-radius:8px;padding:5px 10px;font-size:11px;font-family:inherit;cursor:pointer;}'
+            + 'color:var(--text-primary);border-radius:8px;padding:5px 9px;font-size:11px;font-family:inherit;cursor:pointer;}'
             /* 影厅聊天 */
             + '.mx-mv-chat{margin-top:14px;border-radius:13px;border:1px solid var(--border-color);'
             + 'background:rgba(140,120,150,.04);padding:10px;}'
@@ -45009,18 +45343,60 @@ window.exitCollapseMode = function() {
         var pct = Math.min(100, el / total * 100);
         var paused = !c.runSince;
 
-        var screen = c.embed
-            ? '<div class="mx-mv-screen"><iframe src="' + esc(c.embed) + '" allow="autoplay; fullscreen" '
-            + 'referrerpolicy="no-referrer" allowfullscreen></iframe>'
-            + '<div class="mx-mv-dm" id="mx-mv-dm"></div>'
-            + '<div class="mx-mv-pausetag" id="mx-mv-pausetag" style="display:' + (paused ? '' : 'none') + '">'
-            + esc(partnerName()) + ' 暂停了</div></div>'
-            : '<div class="mx-mv-screen" style="' + posterStyle(c) + '">'
-            + '<div class="mx-mv-dm" id="mx-mv-dm"></div>'
-            + '<div class="mx-mv-scr-in"><b>' + esc(c.title) + '</b>'
-            + '<span>' + esc(c.genre) + (paused ? ' · 已暂停' : ' · 正在放映') + '</span></div>'
-            + '<div class="mx-mv-pausetag" id="mx-mv-pausetag" style="display:' + (paused ? '' : 'none') + '">'
-            + esc(partnerName()) + ' 暂停了</div></div>';
+        /* P44：一条链接可能有两条路 —— 官方播放器、电脑版网页。
+           默认走播放器（它就是给人嵌的，最省事），c.view === 'web' 时改看电脑版。
+           没有官方播放器的（爱奇艺、芒果、普通网页）本来就只有网页一条路。 */
+        var viewMode = (c.view === 'web' || !c.embed) ? 'web' : 'player';
+        var src = viewMode === 'web' ? (c.pcUrl || c.embed) : (c.embed || c.pcUrl);
+        var both = !!c.embed && !!c.pcUrl && c.embed !== c.pcUrl && isPlayerEmbed(c.embed);
+
+        /* 爱奇艺 / 芒果按 UA 把人送回 m 站，硬嵌只会拉起 App（P44 实测）。
+           第一次进来先不建 iframe，把原因摆在屏幕上，让用户自己决定要不要试。 */
+        var gated = !!src && !c.tried && appLocked(src) && !isPlayerEmbed(src);
+
+        var isWeb = !!src && !isPlayerEmbed(src) && !gated;
+
+        /* 网页模式才挂 sandbox：这些页面里最常见的「打不开」就是自动 deeplink，
+           sandbox 不给 allow-top-navigation，只给 by-user-activation ——
+           它自己跳不起来，你手点链接还是能跳。
+           官方播放器不挂，免得某些播放器在沙箱里要登录 / 弹窗就哑了。 */
+        /* referrerpolicy 原来是 no-referrer，P44 改成 strict-origin-when-cross-origin。
+           两者在本地实测都过不了 B 站的风控（player 黑屏、PC 页 412），说明拦的是
+           「陌生来源 + 无 cookie」这件事本身；但把一个「什么都不带」的请求改成
+           「只带站点域名」更像正常的站外嵌入，至少不会额外加一层可疑信号。
+           代价是不再隐藏站点地址（本来就是公开站），路径和参数仍然不带。 */
+        var iframeAttr = 'allow="autoplay; fullscreen; encrypted-media; picture-in-picture" '
+            + 'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen';
+        if (isWeb) iframeAttr += ' sandbox="' + SANDBOX + '"';
+
+        var fsx = '<button class="mx-mv-fsx" id="mx-mv-fsx" type="button" data-mv="fsout" aria-label="退出全屏"'
+            + ' style="display:' + (_fs ? '' : 'none') + '"><i class="fas fa-xmark"></i></button>';
+        var pausetag = '<div class="mx-mv-pausetag" id="mx-mv-pausetag" style="display:'
+            + (paused ? '' : 'none') + '">' + esc(partnerName()) + ' 暂停了</div>';
+
+        var screen;
+        if (gated) {
+            screen = '<div class="mx-mv-screen web' + (_fs ? ' fs' : '') + '" id="mx-mv-screen">'
+                + '<div class="mx-mv-gate">'
+                + '<b>' + esc(hostOf(src)) + ' 会按手机强制跳 App</b>'
+                + '<span>它认得设备类型：电脑版网址在手机上一样会被送回移动页，'
+                + '而移动页一打开就拉起 App。框架里改不了这个判断。</span>'
+                + '<div class="mx-mv-gate-btns">'
+                + '<button data-mv="open">在浏览器打开</button>'
+                + '<button data-mv="trystill" class="ghost">仍然站内试试</button>'
+                + '</div></div></div>';
+        } else if (src) {
+            screen = '<div class="mx-mv-screen' + (isWeb ? ' web' : '') + (_fs ? ' fs' : '') + '" id="mx-mv-screen">'
+                + '<iframe src="' + esc(src) + '" ' + iframeAttr + '></iframe>'
+                + '<div class="mx-mv-dm" id="mx-mv-dm"></div>'
+                + fsx + pausetag + '</div>';
+        } else {
+            screen = '<div class="mx-mv-screen' + (_fs ? ' fs' : '') + '" id="mx-mv-screen" style="' + posterStyle(c) + '">'
+                + '<div class="mx-mv-dm" id="mx-mv-dm"></div>'
+                + '<div class="mx-mv-scr-in"><b>' + esc(c.title) + '</b>'
+                + '<span>' + esc(c.genre) + (paused ? ' · 已暂停' : ' · 正在放映') + '</span></div>'
+                + fsx + pausetag + '</div>';
+        }
 
         return '<div class="mx-mv">'
             + '<div class="mx-mv-room-top">'
@@ -45034,7 +45410,9 @@ window.exitCollapseMode = function() {
             + '<b id="mx-mv-time">' + fmt(el) + '</b><span>/ ' + fmt(total) + '</span>'
             + '<span class="sp"></span>'
             + '<button data-mv="pause">' + (c.runSince ? '暂停' : '继续') + '</button>'
-            + '<button data-mv="change">换一部</button>'
+            + '<button data-mv="fs">' + (_fs ? '还原' : '全屏') + '</button>'
+            + (both ? '<button data-mv="view">' + (viewMode === 'web' ? '播放器' : '电脑版') + '</button>' : '')
+            + (c.link ? '<button data-mv="open">原网页</button>' : '')
             + '</div>'
             + '<div class="mx-mv-chat">'
             + '<div class="flow" id="mx-mv-flow">' + chatHtml(c.chat) + '</div>'
@@ -45045,6 +45423,8 @@ window.exitCollapseMode = function() {
             + '<div class="mx-mv-foot">进度按真实时间走，弹幕偶尔飘一条。'
             + (setg().allowTaCtrl ? 'TA 有时会伸手暂停（' + setg().ctrlProb + '% 概率）。' : 'TA 不会动你的进度。')
             + (setg().danmaku ? '' : '弹幕已关。')
+            + (isWeb ? '<br>这是个普通网页：可以直接上下滑，点「全屏」铺满整屏看更方便。' : '')
+            + (both ? '<br>播放器和电脑版页可以随时切换。' : '')
             + '</div>'
             + '</div>';
     }
@@ -45052,8 +45432,14 @@ window.exitCollapseMode = function() {
     function render(pane, opts) {
         if (!pane) return;
         injectStyle();
+        // 换了容器 = 重新打开这一页，全屏状态不要跟着串过去
+        if (_pane !== pane) { _fs = false; _fsPushed = false; _fsSilentBack = false; }
         _pane = pane;
         stopTimers();
+
+        // 片子结束了还挂着全屏，就把那层收掉（顺带把压进去的那条 history 还回去）
+        if (!_state.cur && _fs) leaveFs();
+        applyFs();
 
         if (!isOn()) {
             pane.innerHTML = '<div class="mx-ask-empty">一起看电影没开。<br>设置 → 高级功能 → Mochi 聊天模块 → 打开「一起看电影」</div>';
@@ -45156,10 +45542,16 @@ window.exitCollapseMode = function() {
                 var url = urlEl ? urlEl.value.trim() : '';
                 var open = openEl ? openEl.value.trim() : '';
                 if (url) {
+                    /* b23.tv 短链本地展开不了（跨域读不到跳转目标），
+                       而它唯一会做的事就是把 B 站 App 拉起来 —— 与其嵌一个白屏，不如说清楚。 */
+                    if (isShortLink(url)) {
+                        toast('b23.tv 短链会跳去 B 站 App，请复制含 BV 号的完整视频链接', 4200);
+                        return;
+                    }
                     var embed = toEmbed(url);
                     if (!embed) { toast('这个链接看起来不太对'); return; }
                     invite({
-                        id: 'ext', title: hostOf(url) + ' 的视频', genre: '外部视频', min: 45,
+                        id: 'ext', title: hostOf(pcDomain(url)) + ' 的视频', genre: '外部视频', min: 45,
                         tone: ['#2a2532', '#4d4358', '#c9bcc8']
                     }, url, open);
                     return;
@@ -45185,7 +45577,38 @@ window.exitCollapseMode = function() {
             }
             if (act === 'pause') {
                 togglePause();
+                /* 只就地刷新，不整页重绘 —— innerHTML 一重建，iframe 就会重新加载，
+                   看到一半的视频会被打回片头。 */
+                onRoomFlush();
+                return;
+            }
+            if (act === 'fs') { toggleFs(); return; }
+            if (act === 'fsout') { leaveFs(); return; }
+            if (act === 'view') {
+                /* 播放器和电脑版页之间切。两边是不同的地址，必须重绘。 */
+                var cv = _state.cur;
+                if (!cv) return;
+                cv.view = cv.view === 'web' ? 'player' : 'web';
+                if (_fs) leaveFs();
+                save();
                 render(pane);
+                return;
+            }
+            if (act === 'trystill') {
+                /* 明知道多半会被拉走，还是想试 —— 用户说了算，记下来别再劝。 */
+                var ct = _state.cur;
+                if (!ct) return;
+                ct.tried = true;
+                save();
+                render(pane);
+                return;
+            }
+            if (act === 'open') {
+                var c0 = _state.cur;
+                if (c0 && c0.link) {
+                    try { window.open(c0.link, '_blank', 'noopener'); }
+                    catch (e) { toast('这个环境打不开新窗口'); }
+                }
                 return;
             }
             if (act === 'end') {
@@ -45194,6 +45617,8 @@ window.exitCollapseMode = function() {
                 return;
             }
             if (act === 'change') {
+                /* 「换一部」按钮 P44 收掉了（和顶上「结束」是同一件事，
+                   390 屏控制条放不下五个按钮），分支留着兼容旧缓存页面。 */
                 if (_state.cur) endFilm(true);
                 render(pane);
                 return;
@@ -45348,7 +45773,7 @@ window.exitCollapseMode = function() {
 
     window.MochiMovieUI = { render: function (pane, opts) { render(pane, opts); } };
     window.MochiMovie = {
-        version: '1.0.1-p26',
+        version: '1.2.0-p44',
         films: function () { return FILMS.slice(); },
         current: function () { return _state.cur; },
         history: function () { return _state.history.slice(); },
@@ -45364,12 +45789,39 @@ window.exitCollapseMode = function() {
         start: startFilm,
         end: endFilm,
         toEmbed: toEmbed,
+        pcDomain: pcDomain,
+        appLocked: appLocked,
+        resolveLink: resolveLink,
         taPause: taPause,
         taResume: taResume,
         danmaku: spawnDanmaku,
         tickOnce: stepRoom,
-        reply: taReplyToUser
+        reply: taReplyToUser,
+        fullscreen: function () { return _fs; }
     };
+
+    /* ---------------- 全屏时的返回键 / ESC ----------------
+       两件事要挡住：系统返回键不能直接退出整页（先退全屏），
+       我们自己 back 掉的那一条也不能让 adv-page 把页面关掉。 */
+
+    window.addEventListener('popstate', function (ev) {
+        if (_fs) {
+            try { ev.stopImmediatePropagation(); } catch (e) { }
+            leaveFs(true);          // 这条 history 已经被这次返回消费掉了
+            return;
+        }
+        if (_fsSilentBack) {
+            _fsSilentBack = false;
+            try { ev.stopImmediatePropagation(); } catch (e) { }
+        }
+    }, true);
+
+    document.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape' && _fs) {
+            try { ev.stopImmediatePropagation(); } catch (e) { }
+            leaveFs();
+        }
+    }, true);
 
     if (window.MochiExt) {
         window.MochiExt.register('onSessionReady', onSessionReady, { id: 'movie', priority: 62 });
@@ -51644,6 +52096,13 @@ window.exitCollapseMode = function() {
             '.input-area{flex-wrap:nowrap!important;}',
             '.input-area>.message-input{min-width:0!important;flex:1 1 0%!important;',
             'width:auto!important;max-width:none!important;}',
+            /* P41：textarea 外面包了一层 .input-shell（麦克风图标住在里面），
+               上面那条直接子选择器就悬空了。换成按新结构再兜一遍，
+               旧的那条留着，免得别的分支还在用旧结构。 */
+            '.input-area>.input-shell{min-width:0!important;flex:1 1 0%!important;',
+            'width:auto!important;max-width:none!important;}',
+            '.input-shell>.message-input{min-width:0!important;width:100%!important;',
+            'max-width:none!important;flex:1 1 auto!important;}',
             '.input-area>.input-buttons{flex:0 0 auto!important;}',
             /* 还不够宽时逐级收紧（由 layoutFix 按实际溢出加 class） */
             '.input-area.mx-guard-tight{gap:5px!important;padding:8px 8px!important;}',
